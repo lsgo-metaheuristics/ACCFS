@@ -1,0 +1,319 @@
+//=======================================================================================
+// Adaptive Cooperative Coevolutionary Feature Selector
+//=======================================================================================
+// Version     : v1.0
+// Created on  : February 2023
+//
+// More details on the following paper:
+//
+// Adaptive Cooperative Coevolutionary Differential Evolution for Parallel Feature
+// Selection in High - Dimensional Datasets
+// Marjan Firouznia, Pietro Ruiu and Giuseppe A.Trunfio
+//
+//=======================================================================================
+
+#include "CCDE.h"
+#include "Decomposer.h"
+#include "SHADE.h"
+#include <ctime>
+#include <omp.h>
+#include <cmath>
+
+#include <algorithm>
+
+#include <time.h>
+#include "matrix.h"
+
+using namespace std;
+extern vector<matrix*> distances_buff;
+
+
+//******************************************************************************************/
+//
+//
+//
+//******************************************************************************************/
+CCDE::CCDE()
+{
+
+}
+
+//******************************************************************************************/
+//
+//
+//
+//******************************************************************************************/
+vector<float> CCDE::localSolutionToGlobalSolution(vector<float> x)
+{
+	vector<float> rx(problemDimension, 0.0);
+	for (int i = 0; i < coordinate_translator.size(); ++i)
+		rx[coordinate_translator[i]] = x[i];
+	return rx;
+}
+
+//******************************************************************************************/
+//
+//
+//
+//******************************************************************************************/
+tFitness CCDE::computeFitnessValue(vector<float>& x)
+{
+	vector<float> rx = localSolutionToGlobalSolution(x);
+
+	tFitness f = fitness(problemDimension, &rx[0]);
+	return f;
+}
+
+
+//******************************************************************************************/
+//
+//
+//
+//******************************************************************************************/
+CCDE::~CCDE()
+{
+	delete decomposer;
+}
+
+
+//******************************************************************************************/
+//
+//
+//
+//******************************************************************************************/
+bool CCDE::keepFeature(int gc, FunctionCallback fitness, vector<unsigned> counters,
+	vector<float> b, float best_fitness, int count_threshold)
+{
+	if (counters[gc] < count_threshold)
+		return true;
+	else
+	{
+		vector<float> ts = current_solution;
+		ts[gc] = 1;
+		numberOfEvaluations++;
+		if (best_fitness - fitness(ts.size(), &ts[0]) > 0.001)
+			return true;
+	}
+	return false;
+}
+
+
+//******************************************************************************************/
+//
+//
+//
+//******************************************************************************************/
+void CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit, float _upperLimit,
+	unsigned int maxNumberOfEvaluations,
+	unsigned _sizeOfSubcomponents,
+	unsigned individualsPerSubcomponent,
+	vector<ConvPlotPoint>& convergence,
+	int seed,
+	unsigned numItePerCycle,
+	unsigned numAvailableThreads,
+	vector<set<unsigned>> decomposition,
+	vector<float> pfi)
+{
+	int LS_freq = 5;
+	int LS_maxIte = 10;
+	int LS_maxParallelTrials = 100;
+	int dec_adapt_freq = 10;
+	int update_dec_fs_counter = 10;
+	int terminate_fs_counter = 25;
+	int counter_threshold = 5;
+	double pfi_threshold = 0.8;
+
+	local_eng.seed(seed);
+
+	current_solution.resize(dim);
+
+	unsigned size_of_sub = _sizeOfSubcomponents;
+	unsigned ind_per_sub = individualsPerSubcomponent;
+	tFitness prevFitness = 0;
+	unsigned fit_not_improve_counter = 0;
+
+	lowerLimit = _lowerLimit;
+	upperLimit = _upperLimit;
+
+	numberOfEvaluations = 0;
+	fitness = _function;
+	problemDimension = dim;
+	current_best_fitness = std::numeric_limits<tFitness>::infinity();
+	std::cout << "Initializing population..." << endl;
+	vector<unsigned> allCoordinates;
+	for (unsigned i = 0; i < problemDimension; ++i)
+	{
+		allCoordinates.push_back(i);
+		coordinate_translator.push_back(i);
+	}
+	bool randomGrouping = true;
+	vector<unsigned> counters(problemDimension, 0);
+	this->decomposer = new Decomposer(*this, allCoordinates, coordinate_translator, pfi, size_of_sub, ind_per_sub, randomGrouping);
+	numberOfEvaluations++;
+	std::cout << "Starting optimization..." << endl;
+	omp_set_max_active_levels(2);
+	unsigned cycle = 1;
+	int nfe_pc = decomposer->numberOfSubcomponents * ind_per_sub;
+	decomposer->allocateOptimizers();
+	if (decomposer->optimizers[0]->dimension != decomposer->optimizers[decomposer->optimizers.size() - 1]->dimension)
+	{
+		std::cout << "Decomposition in " << decomposer->optimizers.size() - 1 << " subcomponents of size " << decomposer->optimizers[0]->dimension;
+		std::cout << " plus a subcomponent of size " << decomposer->optimizers[decomposer->optimizers.size() - 1]->dimension << endl;
+	}
+	else
+		std::cout << "Decomposition in " << decomposer->optimizers.size() << " subcomponents of size " << decomposer->optimizers[0]->dimension << endl;
+	prevFitness = current_best_fitness;
+	fit_not_improve_counter = 0;
+	clock_t startTime = clock();
+
+	while (numberOfEvaluations < maxNumberOfEvaluations && fit_not_improve_counter < terminate_fs_counter && cycle < 10)
+	{
+		if (prevFitness - current_best_fitness > 0)
+			fit_not_improve_counter = 0;
+		else
+			fit_not_improve_counter++;
+
+		prevFitness = current_best_fitness;
+
+		if (cycle % LS_freq == 0)
+			decomposer->parallelLocalSearch(LS_maxIte, LS_maxParallelTrials, pfi, coordinate_translator, numAvailableThreads);
+
+		if (cycle % dec_adapt_freq == 0)
+		{
+			vector<unsigned> c_on;
+			vector<float> ncv;
+#pragma omp parallel for schedule(dynamic) num_threads(numAvailableThreads)
+			for (int i = 0; i < decomposer->coordinates.size(); ++i)
+			{
+				//Gets the actual feature corresponding to i-th coordinate
+				unsigned lc = decomposer->coordinates[i];
+				unsigned gc = coordinate_translator[lc];
+				if (pfi[gc] > pfi_threshold || keepFeature(gc, fitness, counters, decomposer->contextVector, current_best_fitness, counter_threshold))
+				{
+#pragma omp critical
+					{
+						c_on.push_back(lc);
+						ncv.push_back(decomposer->contextVector[lc]);
+					}
+				}
+			}
+
+			if (c_on.size() < decomposer->coordinates.size() || fit_not_improve_counter > update_dec_fs_counter)
+			{
+				cout << "New problem size: " << c_on.size() << endl;
+
+				vector<unsigned> newCoordinates(c_on.size());
+				vector<unsigned> new_coordinate_translator(c_on.size());
+
+#pragma omp parallel for num_threads(numAvailableThreads)
+				for (unsigned i = 0; i < c_on.size(); ++i)
+				{
+					newCoordinates[i] = i;
+					new_coordinate_translator[i] = coordinate_translator[c_on[i]];
+				}
+				coordinate_translator = new_coordinate_translator;
+
+				delete this->decomposer;
+
+				size_of_sub = max(min((unsigned)(2.0 * _sizeOfSubcomponents * newCoordinates.size() / dim), _sizeOfSubcomponents), (unsigned)50);
+				ind_per_sub = min((int)((nfe_pc * size_of_sub) / c_on.size()), 25);
+				cout << "Individuals =" << ind_per_sub << endl;
+
+				this->decomposer = new Decomposer(*this, newCoordinates, coordinate_translator, pfi, size_of_sub, ind_per_sub, randomGrouping, false);
+				decomposer->allocateOptimizers();
+
+#pragma omp parallel for num_threads(numAvailableThreads)
+				for (int i = 0; i < decomposer->coordinates.size(); ++i)
+					this->decomposer->population[0][i] = ncv[i];
+
+				decomposer->contextVector = ncv;
+
+				if (decomposer->sizes[0] != decomposer->sizes[decomposer->sizes.size() - 1])
+				{
+					cout << "New decomposition in " << decomposer->sizes.size() - 1 << " subcomponents of size " << decomposer->sizes[0];
+					cout << " plus a subcomponent of size " << decomposer->sizes[decomposer->sizes.size() - 1] << endl;
+				}
+				else
+					cout << "New Decomposition in " << decomposer->optimizers.size() << " subcomponents of size " << decomposer->sizes[0] << endl;
+			}
+		}
+
+#pragma omp parallel for schedule(dynamic) num_threads(numAvailableThreads) reduction(+: numberOfEvaluations)
+		for (int j = 0; j < decomposer->optimizers.size(); ++j)
+		{
+			if (decomposer->applyRandomGrouping)
+				decomposer->setOptimizerShuffledCoordinates(j, cycle - 1);
+			decomposer->optimizers[j]->updateIndividuals(decomposer->population);
+			decomposer->optimizers[j]->evaluateParents();
+			decomposer->optimizers[j]->optimize(numItePerCycle);
+			decomposer->optimizers[j]->storeIndividuals(decomposer->population);
+			numberOfEvaluations += decomposer->optimizers[j]->nfe;
+			decomposer->optimizers[j]->nfe = 0;
+		}
+
+#pragma omp parallel for num_threads(numAvailableThreads)
+		for (int j = 0; j < decomposer->optimizers.size(); ++j)
+			decomposer->optimizers[j]->updateContextVectorMT();
+
+
+#pragma omp parallel for num_threads(numAvailableThreads)
+		for (int i = 0; i < dim; ++i)
+		{
+			current_solution[coordinate_translator[i]] = decomposer->contextVector[i];
+
+			unsigned lc = decomposer->coordinates[i];
+			unsigned gc = coordinate_translator[lc];
+			if (decomposer->contextVector[lc] < TH)
+				counters[gc]++;
+			else
+				counters[gc] = 0;
+		}
+		
+		cout << cycle << " " << "NOE=" << numberOfEvaluations << "  fitness=" << 1.0 - current_best_fitness << endl;
+		vector<unsigned int> ff = getFeatureFlags();
+		unsigned n_of_f = count(ff.begin(), ff.end(), 1);
+		convergence.push_back(ConvPlotPoint(numberOfEvaluations, 1.0 - current_best_fitness, n_of_f, decomposer->numberOfSubcomponents));		
+		cycle++;
+	}
+
+	vector<unsigned int> ff = getFeatureFlags();
+	unsigned n_of_f = count(ff.begin(), ff.end(), 1);
+	cout << "NOE=" << numberOfEvaluations << "  " << 1.0 - current_best_fitness << " " << n_of_f << endl;
+	clock_t stopTime = clock();
+	elapsedTime = ((float)(stopTime - startTime)) / CLOCKS_PER_SEC;
+	cout << "elapsed time = " << elapsedTime << " s" << endl;
+}
+
+
+//******************************************************************************************/
+//
+//
+//
+//******************************************************************************************/
+vector<unsigned> CCDE::getFeatureFlags()
+{
+	vector< unsigned int> ff(this->problemDimension, 0);
+	for (int i = 0; i < current_solution.size(); ++i)
+		if (current_solution[i] >= TH)
+			ff[i] = 1;
+	return ff;
+}
+
+
+
+//******************************************************************************************/
+//
+//
+//
+//******************************************************************************************/
+void CCDE::printResults()
+{
+	std::cout << endl
+		<< "Final results:" << endl
+		<< "-   Elapsed time = " << elapsedTime << " s" << endl
+		<< std::scientific << "-   Optimum = " << 1.0 - current_best_fitness << endl;
+
+	//for (unsigned int i = 0; i < this->problemDimension; ++i)
+	//std::cout << globalBestPosition[i] << " ";
+	std::cout << std::endl;
+}
