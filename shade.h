@@ -34,59 +34,59 @@ typedef mt19937 RandomEngine;
 
 class SHADE
 {
-	Decomposer &decomposer;
+	Decomposer& decomposer;
 
 	struct doCompareIndividuals
 	{
-		doCompareIndividuals(const tFitness *_f) : f(_f) { }
-		const tFitness *f;
+		doCompareIndividuals(const tFitness* _f) : f(_f) { }
+		const tFitness* f;
 
-		bool operator()(const int & i1, const int & i2)
+		bool operator()(const int& i1, const int& i2)
 		{
 			return f[i1] < f[i2];
 		}
 	};
 
 public:
-	SHADE(unsigned _dimension, unsigned _numberOfIndividuals, Decomposer &_group, RandomEngine &_eng);
-	void setCoordinates(vector<unsigned> &_coordinates);
-	void setCoordinates(unsigned *coordinates, unsigned numOfCoordinates);
+	SHADE(unsigned _dimension, unsigned _numberOfIndividuals, Decomposer& _group, RandomEngine& _eng);
+	void setCoordinates(vector<unsigned>& _coordinates);
+	void setCoordinates(unsigned* coordinates, unsigned numOfCoordinates);
 	void update();
-	void sortPopulation(vector<tFitness> &fitness, vector<int> &sortIndex);
-	void evaluatePopulation(vector< vector<float> > &population, vector< tFitness > &fitness);
+	void sortPopulation(vector<tFitness>& fitness, vector<int>& sortIndex);
+	void evaluatePopulation(vector< vector<float> >& population, vector< tFitness >& fitness);
 	int evaluateParents();
-	tFitness calculateFitnessValue(vector<float> &p);
+	tFitness calculateFitnessValue(vector<float>& p);
 	int optimize(int iterations);
 	void updateIndexOfBest();
-	void loadIndividuals(vector< vector<float> > &population);
-	void storeIndividuals(vector< vector<float> > &population);
-	void updateIndividuals(vector< vector<float> > &population);
+	void loadIndividuals(vector< vector<float> >& population);
+	void storeIndividuals(vector< vector<float> >& population);
+	void updateIndividuals(vector< vector<float> >& population);
 	void updateContextVector();
 	void updateContextVectorMT();
-	void updateContextVector(vector<float> &cv, vector<unsigned> &coords, unsigned &vi);
-	void setParentFitness(vector<tFitness> &fitnessValues);
+	void updateContextVector(vector<float>& cv, vector<unsigned>& coords, unsigned& vi);
+	void setParentFitness(vector<tFitness>& fitnessValues);
 	void handleBounds(vector<float>& child, vector<float>& parent);
 	vector<float>& getCollaborator();
 	unsigned numThreads;
-	unsigned nfe;	
+	unsigned nfe;
 	vector<unsigned> coordinates;
 	map<unsigned, unsigned> globalCoordToLocalCoord;
-	unsigned dimension;	
+	unsigned dimension;
 	vector< vector<float> > parents;
 	vector< vector<float> > offsprings;
 	vector<int> sortIndex;
 	vector<float> SF;
-	vector<float> CR;	
+	vector<float> CR;
 	vector< tFitness > parentsFitness;
 	vector< tFitness > offspringsFitness;
 	tFitness bestFitness;
 	unsigned indexOfBest;
-	unsigned numberOfIndividuals;	
-	RandomEngine &eng;
-	uniform_real<float> unifRandom;	
+	unsigned numberOfIndividuals;
+	RandomEngine& eng;
+	uniform_real<float> unifRandom;
 	vector<float> success_sf;  // successful F values
 	vector<float> success_cr;  // successful CR value
-	vector<tFitness> dif_fitness;	
+	vector<tFitness> dif_fitness;
 	int archive_size;
 	int memory_size;
 	int memory_index;

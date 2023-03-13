@@ -36,49 +36,46 @@ typedef mt19937 RandomEngine;
 class Decomposer
 {
 public:
-	vector<unsigned> coordinates;	
-	CCDE &CCOptimizer;
+	vector<unsigned> coordinates;
+	CCDE& CCOptimizer;
 	vector< SHADE* > optimizers;
-	int sizeOfSubcomponents;    
+	int sizeOfSubcomponents;
 	bool applyRandomGrouping;
-	unsigned individualsPerSubcomponent;	
+	unsigned individualsPerSubcomponent;
 	unsigned numberOfSubcomponents;
-		
+
 	//Current population
-	vector< vector<float> > population;	
+	vector< vector<float> > population;
 	//Final global best position and context vector
-	vector<float> contextVector;	
+	vector<float> contextVector;
 	//Fitnesses of population
 	vector< tFitness > fitnessValues;
 	vector<unsigned> sizes;
 	vector<unsigned> baseCoordIndex;
 
-	Decomposer(CCDE &_CCOptimizer, 				 
-		         vector<unsigned> &_coordinates,
-		         vector<unsigned>& coordinate_translator,
-		         vector<float>& pfi,
-		         unsigned _sizeOfSubcomponents,
-		         unsigned _individualsPerSubcomponent,  		  		         
-			     bool RG=true,				 
-		         bool initContextVector=true);
-
-	Decomposer(CCDE& _CCOptimizer, 
-		vector<set<unsigned>> decomposition,		
-		unsigned _individualsPerSubcomponent,			
+	Decomposer(CCDE& _CCOptimizer,
+		vector<unsigned>& _coordinates,
+		vector<unsigned>& coordinate_translator,
+		vector<float>& pfi,
+		unsigned _sizeOfSubcomponents,
+		unsigned _individualsPerSubcomponent,
+		bool RG = true,
 		bool initContextVector = true);
-	
+
+	Decomposer(CCDE& _CCOptimizer,
+		vector<set<unsigned>> decomposition,
+		unsigned _individualsPerSubcomponent,
+		bool initContextVector = true);
+
 	~Decomposer();
-	vector< SHADE* >  allocateOptimizers(vector<unsigned> &indexes, RandomEngine& eng);	
+	vector< SHADE* >  allocateOptimizers(vector<unsigned>& indexes, RandomEngine& eng);
 	void allocateOptimizers();
-	void setPopulation(vector< vector<float> > &_population);	
-	void setCoordinates(vector<unsigned> &_coordinates);
-	void updateContextVector(SHADE *optimizer);
-	void buildContextVector();
-	void buildContextVectorMT(int numThreads);
+	void setPopulation(vector< vector<float> >& _population);
+	void setCoordinates(vector<unsigned>& _coordinates);
 	void randomGrouping();
 	void randomGroupingMT(int numThreads);
-	void setSeed(unsigned seed);	
-	void setOptimizersCoordinates(vector<unsigned> &indexes);	
+	void setSeed(unsigned seed);
+	void setOptimizersCoordinates(vector<unsigned>& indexes);
 	void parallelLocalSearch(int maxIte, int maxParallelTrials, vector<float>& pfi, vector<unsigned>& coordinate_translator);
 	void reinitPopulation();
 	void setOptimizerCoordinates(unsigned index);

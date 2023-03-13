@@ -174,7 +174,7 @@ float CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit
 	fit_not_improve_counter = 0;
 	clock_t startTime = clock();
 
-	while ( numberOfEvaluations < maxNumberOfEvaluations && fit_not_improve_counter < terminate_fs_counter )
+	while (numberOfEvaluations < maxNumberOfEvaluations && fit_not_improve_counter < terminate_fs_counter)
 	{
 		if (prevFitness - current_best_fitness > 0)
 			fit_not_improve_counter = 0;
@@ -192,20 +192,20 @@ float CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit
 			vector<float> ncv;
 
 #pragma omp parallel for schedule(dynamic) 
-				for (int i = 0; i < decomposer->coordinates.size(); ++i)
+			for (int i = 0; i < decomposer->coordinates.size(); ++i)
+			{
+				//Gets the actual feature corresponding to i-th coordinate
+				unsigned lc = decomposer->coordinates[i];
+				unsigned gc = coordinate_translator[lc];
+				if (pfi[gc] > pfi_threshold || keepFeature(gc, fitness, counters, decomposer->contextVector, current_best_fitness, counter_threshold))
 				{
-					//Gets the actual feature corresponding to i-th coordinate
-					unsigned lc = decomposer->coordinates[i];
-					unsigned gc = coordinate_translator[lc];
-					if (pfi[gc] > pfi_threshold || keepFeature(gc, fitness, counters, decomposer->contextVector, current_best_fitness, counter_threshold))
-					{
 #pragma omp critical
-						{
-							c_on.push_back(lc);
-							ncv.push_back(decomposer->contextVector[lc]);
-						}
+					{
+						c_on.push_back(lc);
+						ncv.push_back(decomposer->contextVector[lc]);
 					}
 				}
+			}
 
 
 			if (c_on.size() < decomposer->coordinates.size() || fit_not_improve_counter > update_dec_fs_counter)
@@ -255,7 +255,7 @@ float CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit
 
 #pragma omp parallel for schedule(dynamic) reduction(+: numberOfEvaluations)
 		for (int j = 0; j < decomposer->optimizers.size(); ++j)
-		{			
+		{
 			decomposer->setOptimizerCoordinates(j);
 			decomposer->optimizers[j]->updateIndividuals(decomposer->population);
 			decomposer->optimizers[j]->evaluateParents();
@@ -268,7 +268,7 @@ float CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit
 
 #pragma omp parallel for 
 		for (int j = 0; j < decomposer->optimizers.size(); ++j)
-			decomposer->optimizers[j]->updateContextVectorMT();						
+			decomposer->optimizers[j]->updateContextVectorMT();
 
 #pragma omp parallel for 
 		for (int i = 0; i < dim; ++i)

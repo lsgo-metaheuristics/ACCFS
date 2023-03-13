@@ -145,26 +145,26 @@ unsigned int read_csv(const std::string& filename, std::vector<std::vector<float
  *
  * \return The number of unique classes in the dataset.
  */
-unsigned int read_tabular_data(const std::string& filename, std::vector<std::vector<float>>& data, std::vector<int>& labels) 
+unsigned int read_tabular_data(const std::string& filename, std::vector<std::vector<float>>& data, std::vector<int>& labels)
 {
 	std::ifstream file(filename);
 
 	if (file) {
 		std::string line;
 		std::set<unsigned int> label_set; // Use set to keep track of unique labels
-		while (std::getline(file, line)) 
+		while (std::getline(file, line))
 		{
 			std::vector<float> row;
 			unsigned int label;
 			std::stringstream ss(line);
 			std::string value;
-			while (ss >> value) 
+			while (ss >> value)
 			{
-				if (!ss.eof()) 
+				if (!ss.eof())
 				{
 					row.push_back(std::stod(value));
 				}
-				else 
+				else
 				{
 					label = std::stoi(value);
 					label_set.insert(label); // Add label to set
@@ -175,7 +175,7 @@ unsigned int read_tabular_data(const std::string& filename, std::vector<std::vec
 		}
 		return label_set.size();
 	}
-	else 
+	else
 	{
 		throw std::runtime_error("Could not open file: " + filename);
 	}
@@ -572,23 +572,23 @@ float compute_distance(vector<vector<float>>& ref,
 	vector<vector<float>>& query,
 	int   ref_index,
 	int   query_index,
-	vector<int> &active_features_flag)
+	vector<int>& active_features_flag)
 {
 	float sum = 0.0;
 	int dim = ref[0].size();
 	int* pf = &(active_features_flag[0]);
 	float* rd = &(ref[ref_index][0]);
-	float* qd = &(query[query_index][0]);	
+	float* qd = &(query[query_index][0]);
 	for (int d = 0; d < dim; ++d)
-	{						
+	{
 		float x1 = *rd++;
-		float x2 = *qd++;		
+		float x2 = *qd++;
 		if (*pf++ > 0)
 		{
 			float diff = x1 - x2;
 			sum += diff * diff;
 		}
-	}	
+	}
 	return sqrtf(sum);
 }
 
@@ -630,7 +630,7 @@ float compute_distance(vector<vector<float>>& ref,
  * \param index   vector containing the index of the k smallest distances
  * \param k       number of smallest distances to locate
  */
-void  k_insertion_sort(int length, float* dist, vector<int> &index, int k)
+void  k_insertion_sort(int length, float* dist, vector<int>& index, int k)
 {
 	// Initialise the first index
 	index[0] = 0;
@@ -678,19 +678,19 @@ void knn(vector<vector<float>>& ref,
 	int k,
 	vector<vector<float>>& knn_dist,
 	vector<vector<int>>& knn_index,
-	vector<int> &active_features_flag)
+	vector<int>& active_features_flag)
 {
-	int tid = omp_get_thread_num();	
+	int tid = omp_get_thread_num();
 	matrix& distances = *distances_buff[tid];
 
 	//compute all distances	
-	if (&ref == &query )
+	if (&ref == &query)
 	{
 		for (int i = 0; i < query.size(); ++i)
 			for (int j = 0; j < ref.size(); ++j)
 				if (i == j)
 					distances[i][j] = 0.0;
-				else 
+				else
 					if (i > j)
 						distances[i][j] = distances[j][i];
 					else
@@ -710,7 +710,7 @@ void knn(vector<vector<float>>& ref,
 	{
 		vector<int> index(ref.size(), 0);
 		std::iota(std::begin(index), std::end(index), 0);
-	    k_insertion_sort(ref.size(), distances[i], index, k);
+		k_insertion_sort(ref.size(), distances[i], index, k);
 		index.resize(k);
 		//knn_dist[i].resize(k);
 		for (int j = 0; j < k; ++j)
@@ -738,7 +738,7 @@ void knn(vector<vector<float>>& ref,
 */
 tFitness knn_balanced_accuracy(int K, mat& train_data, vector<int>& train_labels,
 	mat& test_data, vector<int>& test_labels,
-	vector<int> &active_features_flag)
+	vector<int>& active_features_flag)
 {
 
 	if (train_data.size() == 0)
@@ -750,7 +750,7 @@ tFitness knn_balanced_accuracy(int K, mat& train_data, vector<int>& train_labels
 	{
 		loocv = true; //use leave-one-out cv	
 		k = k + 1;
-	}		
+	}
 	vector<vector<float>> knn_dist;
 	vector<vector<int>> knn_index;
 	knn(train_data, test_data, k, knn_dist, knn_index, active_features_flag);
@@ -758,7 +758,7 @@ tFitness knn_balanced_accuracy(int K, mat& train_data, vector<int>& train_labels
 
 	vector<int> total(num_classes, 0);
 	vector<int> correct(num_classes, 0);
-	mat confusion_matrix(num_classes, std::vector<float>(num_classes, 0));	
+	mat confusion_matrix(num_classes, std::vector<float>(num_classes, 0));
 	for (int i = 0; i < test_data.size(); ++i)
 	{
 		unsigned actual_lab = test_labels[i];
@@ -766,7 +766,7 @@ tFitness knn_balanced_accuracy(int K, mat& train_data, vector<int>& train_labels
 		for (int j = 0; j < k; ++j)
 		{
 			unsigned neigh_index = knn_index[i][j];
-			if (loocv && neigh_index == i) continue;			
+			if (loocv && neigh_index == i) continue;
 			unsigned neigh_label = train_labels[neigh_index];
 			counts[neigh_label]++;
 		}
@@ -774,7 +774,7 @@ tFitness knn_balanced_accuracy(int K, mat& train_data, vector<int>& train_labels
 		unsigned predicted_lab = std::distance(counts.begin(), max_it);
 		if (predicted_lab == actual_lab)
 		{
-			correct[actual_lab]++;			
+			correct[actual_lab]++;
 			confusion_matrix[predicted_lab][actual_lab]++;
 		}
 		total[actual_lab]++;
@@ -812,7 +812,7 @@ tFitness knn_balanced_accuracy(int K, mat& train_data, vector<int>& train_labels
  */
 tFitness knn_accuracy(int K, mat& train_data, vector<int>& train_labels,
 	mat& test_data, vector<int>& test_labels,
-	vector<int> &active_features_flag)
+	vector<int>& active_features_flag)
 {
 	int k = K;
 	bool loocv = false;
@@ -821,7 +821,7 @@ tFitness knn_accuracy(int K, mat& train_data, vector<int>& train_labels,
 		loocv = true; //use leave-one-out cv	
 		k = k + 1;
 	}
-	
+
 	vector<vector<float>> knn_dist;
 	vector<vector<int>> knn_index;
 	knn(train_data, test_data, k, knn_dist, knn_index, active_features_flag);
@@ -838,20 +838,20 @@ tFitness knn_accuracy(int K, mat& train_data, vector<int>& train_labels,
 		for (int j = 0; j < k; ++j)
 		{
 			unsigned neigh_index = knn_index[i][j];
-			if (loocv && neigh_index == i) continue;			
+			if (loocv && neigh_index == i) continue;
 			unsigned neigh_label = train_labels[neigh_index];
 			counts[neigh_label]++;
 		}
 
 		// Get the index of the maximum element
 		auto max_it = std::max_element(counts.begin(), counts.end());
-		unsigned predicted_lab = std::distance(counts.begin(), max_it);		
+		unsigned predicted_lab = std::distance(counts.begin(), max_it);
 		if (predicted_lab == actual_lab)
 		{
 			total_correct++;
 			confusion_matrix[predicted_lab][actual_lab]++;
 		}
-	}	
+	}
 	return ((float)total_correct) / test_data.size();
 }
 
@@ -863,7 +863,7 @@ tFitness evaluate_fitness_on_dataset(int dim, float* x,
 	vector<int>& train_labels,
 	mat& test_dataset,
 	vector<int>& test_labels)
-{	
+{
 	tFitness f = 0;
 	int k = K;
 	bool loocv = false;
@@ -883,7 +883,7 @@ tFitness evaluate_fitness_on_dataset(int dim, float* x,
 			active_features_flag[i] = 0.0;
 			realDim--;
 		}
-	
+
 	vector<vector<float>> knn_dist;
 	vector<vector<int>> knn_index;
 	knn(train_dataset, test_dataset, k, knn_dist, knn_index, active_features_flag);
@@ -892,7 +892,7 @@ tFitness evaluate_fitness_on_dataset(int dim, float* x,
 	float dist_same_label = 0, dist_diff_label = 0;
 	unsigned n_same_label = 0, n_diff_label = 0;
 	vector<unsigned> total(num_classes, 0);
-	vector<int> correct(num_classes, 0);	
+	vector<int> correct(num_classes, 0);
 
 	for (int i = 0; i < test_dataset.size(); ++i)
 	{
@@ -925,9 +925,9 @@ tFitness evaluate_fitness_on_dataset(int dim, float* x,
 		{
 			if (predicted_lab == actual_lab)
 			{
-				correct[actual_lab]+=1;
+				correct[actual_lab] += 1;
 			}
-			total[actual_lab]+=1;
+			total[actual_lab] += 1;
 		}
 	}
 
@@ -956,7 +956,7 @@ tFitness evaluate_fitness_on_dataset(int dim, float* x,
 	}
 	cvAcc /= actual_num_classes;
 	float srdim = sqrt(realDim);
-	f = (1.0 - w1 - w2) * cvAcc + w1 * (1 - dist_same_label / srdim)  + w2 * dist_diff_label / srdim;	
+	f = (1.0 - w1 - w2) * cvAcc + w1 * (1 - dist_same_label / srdim) + w2 * dist_diff_label / srdim;
 	return 1.0 - f;
 }
 
@@ -1097,7 +1097,7 @@ void evaluate_solution_fold(vector<float> x, char* fName, float etime, int nfe)
 *		\param nfe An integer representing the number of function evaluations
 */
 void evaluate_solution(vector<float> x, char* fName, float etime, int nfe)
-{	
+{
 	srand(time(nullptr));
 	vector<size_t> predictions;
 
@@ -1155,12 +1155,12 @@ vector<float> permutationFeatureImportance()
 {
 	cout << "Computing permutation feature importance....";
 	vector<float> feature_imp;
-	
+
 	//fitness with all features
 	vector<float> x(problem_dimension, 1);
 	tFitness f0 = evaluate_on_dataset(problem_dimension, &x[0]);
 	auto rng = std::default_random_engine{};
-	
+
 	for (int i = 0; i < problem_dimension; ++i)
 	{
 		//permutate randomly i-th feature on dataset
@@ -1215,10 +1215,10 @@ void writeTimeToFile(std::string fileName, int i, float time, bool resetOnFirst)
  */
 int toInt(string s)
 {
-	try 
+	try
 	{
 		size_t pos;
-		return stoi(s, &pos);		
+		return stoi(s, &pos);
 	}
 	catch (std::invalid_argument const& ex) {
 		std::cerr << "Invalid number: " << s << '\n';
@@ -1229,8 +1229,8 @@ int toInt(string s)
 }
 
 
-std::vector<int> readThreadMapping(std::string fileName) 
-{	
+std::vector<int> readThreadMapping(std::string fileName)
+{
 	cout << "Reading mapping file:" << fileName << endl;
 	std::ifstream inFile(fileName);
 	if (!inFile) {
@@ -1259,19 +1259,19 @@ std::vector<int> readThreadMapping(std::string fileName)
 
  */
 void optimization(int argc, char* argv[])
-{		
+{
 	unsigned numItePerCycle = 5;
 	unsigned numRep = 1;
 	unsigned numThreads = 6;
 	unsigned numberOfEvaluations = 1.0E06;
-	unsigned int sizeOfSubcomponents = 100;	
-	int numOfIndividuals = 15; 
+	unsigned int sizeOfSubcomponents = 100;
+	int numOfIndividuals = 15;
 	sizeOfSubcomponents = 100;
 	int d_index = 3;
 	d_index = MultipleFeaturesDigit;
-	int suite = 1;	
-	char* threadMappingFile = "threads_mapping_i7.txt";
-	
+	int suite = 1;
+	string threadMappingFile = "threads_mapping_i7.txt";
+
 	if (argc == 5)
 	{
 		suite = toInt(argv[1]); //Test suite in {1,2}
@@ -1279,31 +1279,29 @@ void optimization(int argc, char* argv[])
 		numThreads = toInt(argv[3]); //num threads		
 		threadMappingFile = argv[4];
 	}
-			
-	if( suite==1 )
+
+	if (suite == 1)
 		initDataset1((Dataset1)d_index);
 	else
-	if (suite == 2)
-		initDataset2((Dataset2)d_index);
-	else
-	{
-		cout << "Unspecified test suite";
-		exit(1);
-	}
+		if (suite == 2)
+			initDataset2((Dataset2)d_index);
+		else
+		{
+			cout << "Unspecified test suite";
+			exit(1);
+		}
 
 	cout << "DATSET: " << dataset_name << endl;
 	cout << "Train samples = " << train_features.size() << endl;
-	cout << "Test samples = " << evaluation_features.size() << endl;	
+	cout << "Test samples = " << evaluation_features.size() << endl;
 
-	
+
 	int num_procs = omp_get_num_procs();
 	if (numThreads > num_procs) {
 		cout << "numThreads > num_procs" << endl;
 		exit(1);
 	}
 	omp_set_num_threads(numThreads);
-	int num_cores = num_procs / 2;
-
 
 	// Initialize the affinity mask
 	kmp_affinity_mask_t affinity_mask;
@@ -1321,7 +1319,7 @@ void optimization(int argc, char* argv[])
 	}
 
 	dataset_name.append("_");
-	
+
 	for (int i = 0; i < numThreads; ++i)
 		distances_buff.push_back(new matrix(train_features.size(), train_features.size()));
 
@@ -1335,16 +1333,16 @@ void optimization(int argc, char* argv[])
 	cout << "Using " << numThreads << " threads" << endl;
 	cout << "Number of iterations per cycle = " << numItePerCycle << endl;
 	cout << "Number of individuals per subpopulation = " << numOfIndividuals << endl;
-	
+
 	char fNameOptimizedFeatures[256];
 	char fNameTiming[256];
-	FILE* file;	
-	sprintf_s(fNameOptimizedFeatures, "results_optimized_features_%s.csv", dataset_name.c_str());	
+	FILE* file;
+	sprintf_s(fNameOptimizedFeatures, "results_optimized_features_%s.csv", dataset_name.c_str());
 	sprintf_s(fNameTiming, "timing_%s.csv", dataset_name.c_str());
 	fopen_s(&file, fNameOptimizedFeatures, "wt"); fclose(file);
-	
+
 	vector< vector<ConvPlotPoint> > convergences;
-	
+
 	//left empty in this implementation /apply random grouping)
 	vector<set<unsigned>> decomposition;
 
@@ -1355,7 +1353,7 @@ void optimization(int argc, char* argv[])
 		int seed = seeds[k];
 
 		vector<float> pfi = permutationFeatureImportance();
-		
+
 		float optTime = ccde.optimize(evaluate_on_dataset, problem_dimension, 0.0, 1.0, numberOfEvaluations,
 			sizeOfSubcomponents, numOfIndividuals, convergence, seed, numItePerCycle,
 			numThreads, decomposition, pfi);
@@ -1370,13 +1368,13 @@ void optimization(int argc, char* argv[])
 
 		if (numRep > 1)
 			initDataset1((Dataset1)d_index);
-	}	
+	}
 }
 
 
 
 int main(int argc, char* argv[])
 {
-	optimization(argc, argv);	
+	optimization(argc, argv);
 }
 

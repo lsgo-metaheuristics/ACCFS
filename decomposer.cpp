@@ -209,40 +209,6 @@ void Decomposer::setCoordinates(vector<unsigned> &coordinates)
     this->coordinates = coordinates;
 }
 
-void Decomposer::updateContextVector(SHADE *optimizer)
-{
-    vector<float> v = optimizer->getCollaborator();		
-	CCOptimizer.numberOfEvaluations++;
-	for (unsigned ld = 0; ld<v.size(); ld++)
-      contextVector[optimizer->coordinates[ld]] = v[ld];
-}
-
-
-
-void Decomposer::buildContextVector()
-{    	
-	for (unsigned j = 0; j<optimizers.size(); ++j)
-    {
-		optimizers[j]->nfe = 0;
-		vector<float> v = optimizers[j]->getCollaborator();
-        for (unsigned ld = 0; ld<v.size(); ld++)
-            contextVector[optimizers[j]->coordinates[ld]] = v[ld];			
-    }    	
-}
-
-
-void Decomposer::buildContextVectorMT(int numThreads)
-{
-
-#pragma omp parallel for num_threads(numThreads)
-	for (int j = 0; j<optimizers.size(); ++j)
-	{		
-		vector<float> v = optimizers[j]->getCollaborator();
-		for (unsigned ld = 0; ld<v.size(); ld++)
- 		  contextVector[optimizers[j]->coordinates[ld]] = v[ld];					
-	}	
-}
-
 
 
 void Decomposer::randomGrouping()
