@@ -75,13 +75,11 @@ enum Dataset2
 
 
 
-int n_folds = 5;
+int n_folds = 2;
 int K = 3;
 int K_EVAL = 3;
 float w1 = 0.1;
 float w2 = 0.1;
-tFitness bestFitness = 0.0;
-unsigned evaluations = 0;
 
 
 /**
@@ -496,8 +494,8 @@ void initDataset2(Dataset2 d)
 
 	MinMaxScaler scaler;
 	scaler.fit(all_features);
-	scaler.transform(train_features);
-	scaler.transform(evaluation_features);
+	train_features = scaler.transform(train_features);
+	evaluation_features = scaler.transform(evaluation_features);
 
 	vector<int> indices;
 	for (int i = 0; i < train_features.size(); ++i)	indices.push_back(i);
@@ -682,8 +680,7 @@ void knn(vector<vector<float>>& ref,
 	vector<vector<int>>& knn_index,
 	vector<int> &active_features_flag)
 {
-	int tid = omp_get_thread_num();
-
+	int tid = omp_get_thread_num();	
 	matrix& distances = *distances_buff[tid];
 
 	//compute all distances	
@@ -693,7 +690,7 @@ void knn(vector<vector<float>>& ref,
 			for (int j = 0; j < ref.size(); ++j)
 				if (i == j)
 					distances[i][j] = 0.0;
-				else
+				else 
 					if (i > j)
 						distances[i][j] = distances[j][i];
 					else
@@ -706,7 +703,7 @@ void knn(vector<vector<float>>& ref,
 				distances[i][j] = compute_distance(ref, query, j, i, active_features_flag);
 	}
 
-	knn_dist.resize(query.size());
+	knn_dist.resize(query.size(), vector<float>(k));
 	knn_index.resize(query.size());
 	//Process one query point at a time
 	for (int i = 0; i < query.size(); ++i)
@@ -715,7 +712,7 @@ void knn(vector<vector<float>>& ref,
 		std::iota(std::begin(index), std::end(index), 0);
 	    k_insertion_sort(ref.size(), distances[i], index, k);
 		index.resize(k);
-		knn_dist[i].resize(k);
+		//knn_dist[i].resize(k);
 		for (int j = 0; j < k; ++j)
 			knn_dist[i][j] = distances[i][j];
 		knn_index[i] = index;
@@ -866,8 +863,7 @@ tFitness evaluate_fitness_on_dataset(int dim, float* x,
 	vector<int>& train_labels,
 	mat& test_dataset,
 	vector<int>& test_labels)
-{
-	++evaluations;
+{	
 	tFitness f = 0;
 	int k = K;
 	bool loocv = false;
@@ -914,24 +910,25 @@ tFitness evaluate_fitness_on_dataset(int dim, float* x,
 			if (neigh_label == actual_lab)
 			{
 				dist_same_label += neigh_dist;
-				n_same_label++;
+				n_same_label += 1;
 			}
 			else
 			{
 				dist_diff_label += neigh_dist;
-				n_diff_label++;
+				n_diff_label += 1;
 			}
 		}
 
 		// Get the index of the maximum element
 		auto max_it = std::max_element(count_neigh_labels.begin(), count_neigh_labels.end());
 		unsigned predicted_lab = std::distance(count_neigh_labels.begin(), max_it);
-
-		if (predicted_lab == actual_lab)
 		{
-			correct[actual_lab]++;			
+			if (predicted_lab == actual_lab)
+			{
+				correct[actual_lab]+=1;
+			}
+			total[actual_lab]+=1;
 		}
-		total[actual_lab]++;
 	}
 
 	// if the number of neighbours with a different label is zero 
@@ -1162,7 +1159,6 @@ vector<float> permutationFeatureImportance()
 	//fitness with all features
 	vector<float> x(problem_dimension, 1);
 	tFitness f0 = evaluate_on_dataset(problem_dimension, &x[0]);
-	//evaluate_fitness_on_dataset(dim, x, train_features, train_labels, train_features, train_labels);
 	auto rng = std::default_random_engine{};
 	
 	for (int i = 0; i < problem_dimension; ++i)
@@ -1179,7 +1175,6 @@ vector<float> permutationFeatureImportance()
 			train_features[j][i] = feature_i_train[j];
 
 		tFitness fi = evaluate_on_dataset(problem_dimension, &x[0]);
-		//evaluate_fitness_on_dataset(dim, x, train_features, train_labels, train_features, train_labels);
 
 		feature_imp.push_back(fi - f0);
 
@@ -1201,7 +1196,23 @@ vector<float> permutationFeatureImportance()
 }
 
 
+void writeTimeToFile(std::string fileName, int i, float time, bool resetOnFirst)
+{
+	std::ofstream file(fileName, std::ios::out | std::ios::app);
 
+	if (i == 1 && resetOnFirst) {
+		file.close();
+		file.open(fileName, std::ios::out | std::ios::trunc);
+	}
+
+	file << i << "; " << time << std::endl;
+	file.close();
+}
+
+
+/**
+
+ */
 int toInt(string s)
 {
 	try 
@@ -1217,24 +1228,56 @@ int toInt(string s)
 	}
 }
 
+
+std::vector<int> readThreadMapping(std::string fileName) 
+{	
+	cout << "Reading mapping file:" << fileName << endl;
+	std::ifstream inFile(fileName);
+	if (!inFile) {
+		std::cerr << "Error: File not found." << std::endl;
+		return std::vector<int>();
+	}
+	std::vector<int> result;
+	std::string line;
+	while (std::getline(inFile, line)) {
+		std::istringstream iss(line);
+		int key, value;
+		std::string arrow;
+		if (!(iss >> key >> arrow >> value) || arrow != "->") {
+			std::cerr << "Error: Failed to read line " << line << std::endl;
+			continue;
+		}
+		result.push_back(value);
+	}
+	inFile.close();
+	return result;
+}
+
+
+
+/**
+
+ */
 void optimization(int argc, char* argv[])
 {		
 	unsigned numItePerCycle = 5;
 	unsigned numRep = 1;
-	unsigned numThreads = 12;
+	unsigned numThreads = 6;
 	unsigned numberOfEvaluations = 1.0E06;
 	unsigned int sizeOfSubcomponents = 100;	
 	int numOfIndividuals = 15; 
 	sizeOfSubcomponents = 100;
-	int d_index = BRAIN_TUMOR_1;
+	int d_index = 3;
 	d_index = MultipleFeaturesDigit;
 	int suite = 1;	
+	char* threadMappingFile = "threads_mapping_i7.txt";
 	
-	if (argc == 4)
+	if (argc == 5)
 	{
 		suite = toInt(argv[1]); //Test suite in {1,2}
 		d_index = toInt(argv[2]); //dataset in {1,2,...}
 		numThreads = toInt(argv[3]); //num threads		
+		threadMappingFile = argv[4];
 	}
 			
 	if( suite==1 )
@@ -1252,6 +1295,31 @@ void optimization(int argc, char* argv[])
 	cout << "Train samples = " << train_features.size() << endl;
 	cout << "Test samples = " << evaluation_features.size() << endl;	
 
+	
+	int num_procs = omp_get_num_procs();
+	if (numThreads > num_procs) {
+		cout << "numThreads > num_procs" << endl;
+		exit(1);
+	}
+	omp_set_num_threads(numThreads);
+	int num_cores = num_procs / 2;
+
+
+	// Initialize the affinity mask
+	kmp_affinity_mask_t affinity_mask;
+	kmp_create_affinity_mask(&affinity_mask);
+	vector<int> mapping = readThreadMapping(threadMappingFile);
+	if (mapping.size() != num_procs) {
+		cout << "Thread mapping not correct" << endl;
+		exit(1);
+	}
+#pragma omp parallel  
+	{
+		int id = omp_get_thread_num();
+		kmp_set_affinity_mask_proc(mapping[id], &affinity_mask);
+		kmp_set_affinity(&affinity_mask);
+	}
+
 	dataset_name.append("_");
 	
 	for (int i = 0; i < numThreads; ++i)
@@ -1267,13 +1335,12 @@ void optimization(int argc, char* argv[])
 	cout << "Using " << numThreads << " threads" << endl;
 	cout << "Number of iterations per cycle = " << numItePerCycle << endl;
 	cout << "Number of individuals per subpopulation = " << numOfIndividuals << endl;
-
-	char fNameFullFeatures[256];
+	
 	char fNameOptimizedFeatures[256];
-	FILE* file;
-	sprintf_s(fNameFullFeatures, "results_full_features_%s.csv", dataset_name.c_str());
-	sprintf_s(fNameOptimizedFeatures, "results_optimized_features_%s.csv", dataset_name.c_str());
-	fopen_s(&file, fNameFullFeatures, "wt"); fclose(file);
+	char fNameTiming[256];
+	FILE* file;	
+	sprintf_s(fNameOptimizedFeatures, "results_optimized_features_%s.csv", dataset_name.c_str());	
+	sprintf_s(fNameTiming, "timing_%s.csv", dataset_name.c_str());
 	fopen_s(&file, fNameOptimizedFeatures, "wt"); fclose(file);
 	
 	vector< vector<ConvPlotPoint> > convergences;
@@ -1288,17 +1355,13 @@ void optimization(int argc, char* argv[])
 		int seed = seeds[k];
 
 		vector<float> pfi = permutationFeatureImportance();
-
-		elapsedTimeFit = 0;
-		clock_t startTimeCycle = clock();
-
-		ccde.optimize(evaluate_on_dataset_cv, problem_dimension, 0.0, 1.0, numberOfEvaluations,
+		
+		float optTime = ccde.optimize(evaluate_on_dataset, problem_dimension, 0.0, 1.0, numberOfEvaluations,
 			sizeOfSubcomponents, numOfIndividuals, convergence, seed, numItePerCycle,
 			numThreads, decomposition, pfi);
 
-		clock_t stopTimeCycle = clock();
-		float elapsedTimeCycle = ((float)(stopTimeCycle - startTimeCycle)) / CLOCKS_PER_SEC;
-		cout << "Time spent in optimization = " << elapsedTimeCycle << endl;
+		cout << "elapsed time = " << optTime << " s" << endl;
+		writeTimeToFile(fNameTiming, numThreads, optTime, false);
 
 		if (convergence.size() > 0)
 			convergences.push_back(convergence);
@@ -1308,86 +1371,6 @@ void optimization(int argc, char* argv[])
 		if (numRep > 1)
 			initDataset1((Dataset1)d_index);
 	}	
-
-	if (convergences.size() == 0) return;
-	if (convergences[0].size() == 0) return;
-	char fName[256];
-	sprintf_s(fName, "convplot_%s_dec%d_popsize%d.csv", dataset_name.c_str(), sizeOfSubcomponents, numOfIndividuals);
-
-	fopen_s(&file, fName, "wt");
-	vector<ConvPlotPoint> averageConvergence;
-
-	int maxSize = 0;
-	int idOfMaxSize = 0;
-	for (unsigned q = 0; q < convergences.size(); ++q)
-		if (convergences[q].size() > maxSize)
-		{
-			maxSize = convergences[q].size();
-			idOfMaxSize = q;
-		}
-
-	for (unsigned q = 0; q < maxSize; ++q)
-	{
-		tFitness f = 0.0;
-		float nfeatures = 0;
-		float nsubs = 0;
-		vector<bool> found(numRep, false);
-		for (unsigned k = 0; k < numRep; ++k)
-		{
-			if (q < convergences[k].size())
-			{
-				fprintf(file, "%d; %.8e; %d; %d;", convergences[k][q].nfe, convergences[k][q].f, convergences[k][q].numFeatures, convergences[k][q].numberOfSubcomponents);
-				if (!found[k])
-					if (convergences[k][q].nfe > numberOfEvaluations / 2)
-					{
-						found[k] = true;
-					}
-			}
-			else
-			{
-				fprintf(file, "; ; ; ;");
-			}
-
-
-			//trova il più vicino
-			int closerIndex = 0;
-			float dist = 1.0E10;
-			for (int j = 0; j < convergences[k].size(); j++)
-				if (fabs((float)(((int)convergences[k][j].nfe) - ((int)convergences[idOfMaxSize][q].nfe))) < dist)
-				{
-					dist = fabs((float)(((int)convergences[k][j].nfe) - ((int)convergences[idOfMaxSize][q].nfe)));
-					closerIndex = j;
-				}
-			f += convergences[k][closerIndex].f;
-			nfeatures += convergences[k][closerIndex].numFeatures;
-			nsubs += convergences[k][closerIndex].numberOfSubcomponents;
-		}
-
-		fprintf(file, "%d;", convergences[idOfMaxSize][q].nfe);
-		fprintf(file, "%.8e;", f / numRep);
-		fprintf(file, "%.8e;", nfeatures / numRep);
-		fprintf(file, "%.8e;", nsubs / numRep);
-		fprintf(file, "\n");
-
-		averageConvergence.push_back(ConvPlotPoint(convergences[idOfMaxSize][q].nfe, f / numRep, nfeatures / numRep, nsubs / numRep));
-	}
-
-	char fNameAverageConvergences[256];
-	sprintf_s(fNameAverageConvergences, "avg_convplot_%s_dec%d_popsize%d.csv", dataset_name.c_str(), sizeOfSubcomponents, numOfIndividuals);
-
-
-	fopen_s(&file, fNameAverageConvergences, "wt");
-	for (unsigned q = 0; q < maxSize; ++q)
-	{
-		if (q < averageConvergence.size())
-			fprintf(file, "%d; %.3e; %d; %d;", averageConvergence[q].nfe, averageConvergence[q].f, averageConvergence[q].numFeatures, averageConvergence[q].numberOfSubcomponents);
-		else
-			fprintf(file, "; ; ");
-		fprintf(file, "\n");
-	}
-	fclose(file);
-
-	cout << "Time spent in fitness = " << elapsedTimeFit << endl;
 }
 
 

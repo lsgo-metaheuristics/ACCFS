@@ -83,7 +83,7 @@ public:
     ~CCDE();
 
     ///Perform the optimization
-    void optimize(FunctionCallback _function, unsigned dim, float domain_min, float domain_max, unsigned int maxNumberOfEvaluations, unsigned sizeOfSubcomponents,
+    float optimize(FunctionCallback _function, unsigned dim, float domain_min, float domain_max, unsigned int maxNumberOfEvaluations, unsigned sizeOfSubcomponents,
         unsigned individualsPerSubcomponent,
         vector<ConvPlotPoint>& convergence, int seed, unsigned numItePerCycle, unsigned numThreads,
         vector<set<unsigned>> decomposition,
@@ -91,7 +91,7 @@ public:
     void printResults();
     vector<unsigned> getFeatureFlags();
     tFitness computeFitnessValue(vector<float>& x);
-    bool keepFeature(int gc, FunctionCallback fitness, vector<unsigned> counters, vector<float> b, float best_fitness, int count_threshold);
+    bool keepFeature(int gc, FunctionCallback fitness, vector<unsigned> counters, vector<float> b, float best_fitness, int count_threshold);    
 
     unsigned problemDimension;
     Decomposer* decomposer;
@@ -99,20 +99,15 @@ public:
     unsigned ite;
     float lowerLimit;
     float upperLimit;
-    float elapsedTime;
-    unsigned functionIndex;
+    float elapsedTime;    
     vector<unsigned> subcomponentSizes;
     vector<unsigned> numIndividualsPerSubcomponents;
     vector<float> current_solution;
     tFitness current_best_fitness;
     vector<unsigned> coordinate_translator;
     vector<float> localSolutionToGlobalSolution(vector<float> x);
-
-
     clock_t trainingTime;
-    clock_t evaluationTime;
-    RandomEngine local_eng;
-    vector<RandomEngine> thread_random_eng;
+    RandomEngine local_eng;    
     uniform_real_distribution<float> unifRandom;
 };
 

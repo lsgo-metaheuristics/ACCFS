@@ -12,17 +12,21 @@
 //
 //=======================================================================================
 
-#include "CCDE.h"
-#include "Decomposer.h"
-#include "SHADE.h"
 #include <ctime>
 #include <omp.h>
 #include <cmath>
-
+#include <fstream>
+#include <string>
 #include <algorithm>
-
 #include <time.h>
 #include "matrix.h"
+#include "CCDE.h"
+#include "Decomposer.h"
+#include "SHADE.h"
+#include "CCDE.h"
+#include "Decomposer.h"
+#include "SHADE.h"
+
 
 using namespace std;
 extern vector<matrix*> distances_buff;
@@ -76,6 +80,10 @@ CCDE::~CCDE()
 }
 
 
+
+
+
+
 //******************************************************************************************/
 //
 //
@@ -98,12 +106,13 @@ bool CCDE::keepFeature(int gc, FunctionCallback fitness, vector<unsigned> counte
 }
 
 
+
 //******************************************************************************************/
 //
 //
 //
 //******************************************************************************************/
-void CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit, float _upperLimit,
+float CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit, float _upperLimit,
 	unsigned int maxNumberOfEvaluations,
 	unsigned _sizeOfSubcomponents,
 	unsigned individualsPerSubcomponent,
@@ -114,7 +123,7 @@ void CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit,
 	vector<set<unsigned>> decomposition,
 	vector<float> pfi)
 {
-	int LS_freq = 5;
+	int LS_freq = 4;
 	int LS_maxIte = 10;
 	int LS_maxParallelTrials = 100;
 	int dec_adapt_freq = 10;
@@ -151,7 +160,6 @@ void CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit,
 	this->decomposer = new Decomposer(*this, allCoordinates, coordinate_translator, pfi, size_of_sub, ind_per_sub, randomGrouping);
 	numberOfEvaluations++;
 	std::cout << "Starting optimization..." << endl;
-	omp_set_max_active_levels(2);
 	unsigned cycle = 1;
 	int nfe_pc = decomposer->numberOfSubcomponents * ind_per_sub;
 	decomposer->allocateOptimizers();
@@ -166,7 +174,7 @@ void CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit,
 	fit_not_improve_counter = 0;
 	clock_t startTime = clock();
 
-	while (numberOfEvaluations < maxNumberOfEvaluations && fit_not_improve_counter < terminate_fs_counter && cycle < 10)
+	while ( numberOfEvaluations < maxNumberOfEvaluations && fit_not_improve_counter < terminate_fs_counter )
 	{
 		if (prevFitness - current_best_fitness > 0)
 			fit_not_improve_counter = 0;
@@ -176,27 +184,29 @@ void CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit,
 		prevFitness = current_best_fitness;
 
 		if (cycle % LS_freq == 0)
-			decomposer->parallelLocalSearch(LS_maxIte, LS_maxParallelTrials, pfi, coordinate_translator, numAvailableThreads);
+			decomposer->parallelLocalSearch(LS_maxIte, LS_maxParallelTrials, pfi, coordinate_translator);
 
 		if (cycle % dec_adapt_freq == 0)
 		{
 			vector<unsigned> c_on;
 			vector<float> ncv;
-#pragma omp parallel for schedule(dynamic) num_threads(numAvailableThreads)
-			for (int i = 0; i < decomposer->coordinates.size(); ++i)
-			{
-				//Gets the actual feature corresponding to i-th coordinate
-				unsigned lc = decomposer->coordinates[i];
-				unsigned gc = coordinate_translator[lc];
-				if (pfi[gc] > pfi_threshold || keepFeature(gc, fitness, counters, decomposer->contextVector, current_best_fitness, counter_threshold))
+
+#pragma omp parallel for schedule(dynamic) 
+				for (int i = 0; i < decomposer->coordinates.size(); ++i)
 				{
-#pragma omp critical
+					//Gets the actual feature corresponding to i-th coordinate
+					unsigned lc = decomposer->coordinates[i];
+					unsigned gc = coordinate_translator[lc];
+					if (pfi[gc] > pfi_threshold || keepFeature(gc, fitness, counters, decomposer->contextVector, current_best_fitness, counter_threshold))
 					{
-						c_on.push_back(lc);
-						ncv.push_back(decomposer->contextVector[lc]);
+#pragma omp critical
+						{
+							c_on.push_back(lc);
+							ncv.push_back(decomposer->contextVector[lc]);
+						}
 					}
 				}
-			}
+
 
 			if (c_on.size() < decomposer->coordinates.size() || fit_not_improve_counter > update_dec_fs_counter)
 			{
@@ -205,12 +215,13 @@ void CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit,
 				vector<unsigned> newCoordinates(c_on.size());
 				vector<unsigned> new_coordinate_translator(c_on.size());
 
-#pragma omp parallel for num_threads(numAvailableThreads)
+#pragma omp parallel for 
 				for (unsigned i = 0; i < c_on.size(); ++i)
 				{
 					newCoordinates[i] = i;
 					new_coordinate_translator[i] = coordinate_translator[c_on[i]];
 				}
+
 				coordinate_translator = new_coordinate_translator;
 
 				delete this->decomposer;
@@ -222,7 +233,7 @@ void CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit,
 				this->decomposer = new Decomposer(*this, newCoordinates, coordinate_translator, pfi, size_of_sub, ind_per_sub, randomGrouping, false);
 				decomposer->allocateOptimizers();
 
-#pragma omp parallel for num_threads(numAvailableThreads)
+#pragma omp parallel for 
 				for (int i = 0; i < decomposer->coordinates.size(); ++i)
 					this->decomposer->population[0][i] = ncv[i];
 
@@ -238,11 +249,14 @@ void CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit,
 			}
 		}
 
-#pragma omp parallel for schedule(dynamic) num_threads(numAvailableThreads) reduction(+: numberOfEvaluations)
+		if (decomposer->applyRandomGrouping)
+			shuffle(decomposer->coordinates.begin(), decomposer->coordinates.end(), local_eng);
+
+
+#pragma omp parallel for schedule(dynamic) reduction(+: numberOfEvaluations)
 		for (int j = 0; j < decomposer->optimizers.size(); ++j)
-		{
-			if (decomposer->applyRandomGrouping)
-				decomposer->setOptimizerShuffledCoordinates(j, cycle - 1);
+		{			
+			decomposer->setOptimizerCoordinates(j);
 			decomposer->optimizers[j]->updateIndividuals(decomposer->population);
 			decomposer->optimizers[j]->evaluateParents();
 			decomposer->optimizers[j]->optimize(numItePerCycle);
@@ -251,13 +265,17 @@ void CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit,
 			decomposer->optimizers[j]->nfe = 0;
 		}
 
-#pragma omp parallel for num_threads(numAvailableThreads)
+
+#pragma omp parallel for 
 		for (int j = 0; j < decomposer->optimizers.size(); ++j)
-			decomposer->optimizers[j]->updateContextVectorMT();
+			decomposer->optimizers[j]->updateContextVectorMT();						
 
-
-#pragma omp parallel for num_threads(numAvailableThreads)
+#pragma omp parallel for 
 		for (int i = 0; i < dim; ++i)
+			std::fill(&current_solution[i], &current_solution[i + 1], 0);
+
+#pragma omp parallel for 
+		for (int i = 0; i < decomposer->coordinates.size(); ++i)
 		{
 			current_solution[coordinate_translator[i]] = decomposer->contextVector[i];
 
@@ -268,11 +286,11 @@ void CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit,
 			else
 				counters[gc] = 0;
 		}
-		
+
 		cout << cycle << " " << "NOE=" << numberOfEvaluations << "  fitness=" << 1.0 - current_best_fitness << endl;
 		vector<unsigned int> ff = getFeatureFlags();
 		unsigned n_of_f = count(ff.begin(), ff.end(), 1);
-		convergence.push_back(ConvPlotPoint(numberOfEvaluations, 1.0 - current_best_fitness, n_of_f, decomposer->numberOfSubcomponents));		
+		convergence.push_back(ConvPlotPoint(numberOfEvaluations, 1.0 - current_best_fitness, n_of_f, decomposer->numberOfSubcomponents));
 		cycle++;
 	}
 
@@ -281,7 +299,7 @@ void CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit,
 	cout << "NOE=" << numberOfEvaluations << "  " << 1.0 - current_best_fitness << " " << n_of_f << endl;
 	clock_t stopTime = clock();
 	elapsedTime = ((float)(stopTime - startTime)) / CLOCKS_PER_SEC;
-	cout << "elapsed time = " << elapsedTime << " s" << endl;
+	return elapsedTime;
 }
 
 

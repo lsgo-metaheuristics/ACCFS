@@ -36,9 +36,7 @@ typedef mt19937 RandomEngine;
 class Decomposer
 {
 public:
-	vector<unsigned> coordinates;
-	vector< vector<unsigned> > shuffledCoordinates;
-	//map<unsigned, JADE*> coordinateToOptimizer;
+	vector<unsigned> coordinates;	
 	CCDE &CCOptimizer;
 	vector< SHADE* > optimizers;
 	int sizeOfSubcomponents;    
@@ -79,12 +77,9 @@ public:
 	void buildContextVectorMT(int numThreads);
 	void randomGrouping();
 	void randomGroupingMT(int numThreads);
-	void setSeed(unsigned seed);
-	void setOptimizersCoordinatesAndEvaluatePopulation();		
-	void setOptimizersCoordinatesAndEvaluatePopulation(vector<unsigned> &indexes);
-	void setOptimizersCoordinates(vector<unsigned> &indexes);
-	void setOptimizersShuffledCoordinates(vector<unsigned> &indexes, unsigned cycle);
-	void setOptimizerShuffledCoordinates(unsigned index, unsigned cycle);
-	void parallelLocalSearch(int maxIte, int maxParallelTrials, vector<float>& pfi, vector<unsigned>& coordinate_translator, int numAvailableThreads);
+	void setSeed(unsigned seed);	
+	void setOptimizersCoordinates(vector<unsigned> &indexes);	
+	void parallelLocalSearch(int maxIte, int maxParallelTrials, vector<float>& pfi, vector<unsigned>& coordinate_translator);
 	void reinitPopulation();
+	void setOptimizerCoordinates(unsigned index);
 };

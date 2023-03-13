@@ -65,18 +65,7 @@ Decomposer::Decomposer(CCDE &_CCOptimizer,
 		contextVector.resize(problem_dimension);
 		for (unsigned i = 0; i < problem_dimension; ++i)
 			contextVector[i] = population[individualsPerSubcomponent / 2][i];		
-	}
-
-	//prepare shuffled coordinates
-	if (applyRandomGrouping )
-	{
-		vector<unsigned> sc = coordinates;
-		for (int i = 0; i < MAX_NUM_OF_CYCLES; ++i)
-		{
-			shuffledCoordinates.push_back(sc);
-			shuffle(sc.begin(), sc.end(), CCOptimizer.local_eng);
-		}
-	}
+	}	
 }
 
 
@@ -172,20 +161,6 @@ void  Decomposer::allocateOptimizers()
 	}
 }
 
-void  Decomposer::setOptimizersCoordinatesAndEvaluatePopulation(vector<unsigned> &indexes)
-{
-	for (int i = 0; i < indexes.size(); ++i)
-	{
-		unsigned j = indexes[i];
-		SHADE *optimizer = optimizers[j];		
-		optimizer->setCoordinates(&coordinates[baseCoordIndex[j]], sizes[j]);
-		optimizer->updateIndividuals(population);
-		optimizer->evaluateParents();
-		optimizer->updateIndexOfBest();
-	}	
-}
-
-
 void  Decomposer::setOptimizersCoordinates(vector<unsigned> &indexes)
 {
 	for (int i = 0; i < indexes.size(); ++i)
@@ -196,31 +171,11 @@ void  Decomposer::setOptimizersCoordinates(vector<unsigned> &indexes)
 	}
 }
 
-void  Decomposer::setOptimizersShuffledCoordinates(vector<unsigned> &indexes, unsigned cycle)
-{
-	if (cycle >= MAX_NUM_OF_CYCLES - 1)
-	{
-		cout << "reached the maximum number of cycles" << endl;
-		exit(1);
-	}
 
-	for (int i = 0; i < indexes.size(); ++i)
-	{
-		unsigned j = indexes[i];
-		SHADE *optimizer = optimizers[j];
-		optimizer->setCoordinates(&shuffledCoordinates[cycle][baseCoordIndex[j]], sizes[j]);		
-	}
-}
 
-void  Decomposer::setOptimizerShuffledCoordinates(unsigned index, unsigned cycle)
+void  Decomposer::setOptimizerCoordinates(unsigned index)
 {
-	if (cycle >= MAX_NUM_OF_CYCLES - 1)
-	{
-		cout << "reached the maximum number of cycles" << endl;
-		exit(1);
-	}
-	
-	optimizers[index]->setCoordinates(&shuffledCoordinates[cycle][baseCoordIndex[index]], sizes[index]);
+	optimizers[index]->setCoordinates(&coordinates[baseCoordIndex[index]], sizes[index]);
 }
 
 
@@ -233,27 +188,6 @@ void Decomposer::setPopulation(vector< vector<float> > &_population)
 
 
 
-void Decomposer::setOptimizersCoordinatesAndEvaluatePopulation()
-{
-    unsigned d = 0, k = 0, size = sizeOfSubcomponents;
-    while ( d<coordinates.size() )
-    {
-        if (d + size > coordinates.size())
-            size = coordinates.size() - d;
-
-        SHADE *optimizer = optimizers[k];
-
-        optimizer->setCoordinates(&(coordinates[d]), size);
-
-        optimizer->loadIndividuals(population);
-        optimizer->evaluateParents();
-        optimizer->updateIndexOfBest();
-
-        d += size;
-        k++;
-    }
-
-}
 
 Decomposer::~Decomposer()
 {
@@ -356,7 +290,7 @@ void Decomposer::randomGroupingMT(int numThreads)
 }
 
 
-void Decomposer::parallelLocalSearch(int maxIte, int maxParallelTrials,  vector<float>& pfig, vector<unsigned>& coordinate_translator, int numAvailableThreads)
+void Decomposer::parallelLocalSearch(int maxIte, int maxParallelTrials,  vector<float>& pfig, vector<unsigned>& coordinate_translator)
 {				
 	cout << "Local search.....";
 	int problem_dimension = contextVector.size();
@@ -378,27 +312,31 @@ void Decomposer::parallelLocalSearch(int maxIte, int maxParallelTrials,  vector<
 		vector<float> fy(maxParallelTrials, 0);
 		vector<int> flip(maxParallelTrials, 0);
 
-#pragma omp parallel for schedule(dynamic) num_threads(numAvailableThreads)
-		for (int i = 0; i < maxParallelTrials; ++i)
+#pragma omp parallel
 		{
-			vector<float> b(contextVector.size(), 0);						
-			float v = distribution(CCOptimizer.local_eng)* pfir[pfir.size()-1];
-			int c;
-			for (c = 0; c < pfir.size()-1; ++c)
-				if (v < pfir[c+1])
-					break;			
-			vector<float> y = yc;
-			if (y[c] > TH) 
+			std::mt19937 rng(std::random_device{}());
+#pragma omp for schedule(dynamic)
+			for (int i = 0; i < maxParallelTrials; ++i)
 			{
-				y[c] = TH - 0.2;
-				flip[i] = -c;
+				vector<float> b(contextVector.size(), 0);
+				float v = distribution(rng) * pfir[pfir.size() - 1];
+				int c;
+				for (c = 0; c < pfir.size() - 1; ++c)
+					if (v < pfir[c + 1])
+						break;
+				vector<float> y = yc;
+				if (y[c] > TH)
+				{
+					y[c] = TH - 0.2;
+					flip[i] = -c;
+				}
+				else
+				{
+					y[c] = TH + 0.2;
+					flip[i] = c;
+				}
+				fy[i] = CCOptimizer.computeFitnessValue(y);
 			}
-			else
-			{
-				y[c] = TH + 0.2;
-				flip[i] = c;
-			}			
-			fy[i] = CCOptimizer.computeFitnessValue(y);
 		}
 		CCOptimizer.numberOfEvaluations += maxParallelTrials;
 		int k = min_element(fy.begin(), fy.end()) - fy.begin();		
