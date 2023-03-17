@@ -31,8 +31,6 @@ using namespace std;
 
 typedef mt19937 RandomEngine;
 
-
-
 class Decomposer
 {
 public:
@@ -53,30 +51,15 @@ public:
 	vector<unsigned> sizes;
 	vector<unsigned> baseCoordIndex;
 
-	Decomposer(CCDE& _CCOptimizer,
-		vector<unsigned>& _coordinates,
-		vector<unsigned>& coordinate_translator,
-		vector<float>& pfi,
-		unsigned _sizeOfSubcomponents,
-		unsigned _individualsPerSubcomponent,
-		bool RG = true,
-		bool initContextVector = true);
-
-	Decomposer(CCDE& _CCOptimizer,
-		vector<set<unsigned>> decomposition,
-		unsigned _individualsPerSubcomponent,
-		bool initContextVector = true);
+	Decomposer(CCDE &_CCOptimizer, vector<unsigned> &_coordinates,
+               unsigned _sizeOfSubcomponents, unsigned _individualsPerSubcomponent, bool RG,
+               bool initContextVector);
 
 	~Decomposer();
-	vector< SHADE* >  allocateOptimizers(vector<unsigned>& indexes, RandomEngine& eng);
-	void allocateOptimizers();
-	void setPopulation(vector< vector<float> >& _population);
-	void setCoordinates(vector<unsigned>& _coordinates);
-	void randomGrouping();
-	void randomGroupingMT(int numThreads);
-	void setSeed(unsigned seed);
-	void setOptimizersCoordinates(vector<unsigned>& indexes);
-	void parallelLocalSearch(int maxIte, int maxParallelTrials, vector<float>& pfi, vector<unsigned>& coordinate_translator);
+
+    void allocateOptimizers();
+
+    void parallelLocalSearch(int maxIte, int maxParallelTrials, vector<float>& pfi, vector<unsigned>& coordinate_translator);
 	void reinitPopulation();
 	void setOptimizerCoordinates(unsigned index);
 };

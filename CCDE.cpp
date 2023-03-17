@@ -86,7 +86,7 @@ CCDE::~CCDE()
  * \return A boolean value indicating whether the feature should be kept or not
  */
 bool CCDE::keepFeature(int gc, FunctionCallback fitnessFunction, vector<unsigned> counters,
-	                   float best_fitness, int count_threshold)
+	float best_fitness, int count_threshold)
 {
 	if (counters[gc] < count_threshold)
 		return true;
@@ -127,7 +127,7 @@ float CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit
 	vector<ConvPlotPoint>& convergence,
 	int seed,
 	unsigned numItePerCycle,
-	vector<set<unsigned>> &decomposition,
+	vector<set<unsigned>>& decomposition,
 	vector<float> pfi)
 {
 	int LS_freq = 4;
@@ -164,7 +164,7 @@ float CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit
 	}
 	bool randomGrouping = true;
 	vector<unsigned> counters(problemDimension, 0);
-	this->decomposer = new Decomposer(*this, allCoordinates, coordinate_translator, pfi, size_of_sub, ind_per_sub, randomGrouping);
+	this->decomposer = new Decomposer(*this, allCoordinates, size_of_sub, ind_per_sub, randomGrouping, true);
 	numberOfEvaluations++;
 	std::cout << "Starting optimization..." << endl;
 	unsigned cycle = 1;
@@ -202,7 +202,7 @@ float CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit
 			for (unsigned int lc : decomposer->coordinates)
 			{
 				//Gets the actual feature corresponding to i-th coordinate
-					unsigned gc = coordinate_translator[lc];
+				unsigned gc = coordinate_translator[lc];
 				if (pfi[gc] > pfi_threshold || keepFeature(gc, fitness, counters, current_best_fitness, counter_threshold))
 				{
 #pragma omp critical
@@ -236,7 +236,7 @@ float CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit
 				ind_per_sub = min((int)((nfe_pc * size_of_sub) / c_on.size()), 25);
 				cout << "Individuals =" << ind_per_sub << endl;
 
-				this->decomposer = new Decomposer(*this, newCoordinates, coordinate_translator, pfi, size_of_sub, ind_per_sub, randomGrouping, false);
+				this->decomposer = new Decomposer(*this, newCoordinates, size_of_sub, ind_per_sub, randomGrouping, false);
 				decomposer->allocateOptimizers();
 
 #pragma omp parallel for 
@@ -273,7 +273,7 @@ float CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit
 
 
 #pragma omp parallel for 
-		for (auto & optimizer : decomposer->optimizers)
+		for (auto& optimizer : decomposer->optimizers)
 			optimizer->updateContextVectorMT();
 
 #pragma omp parallel for 

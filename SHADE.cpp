@@ -323,7 +323,6 @@ void SHADE::update()
 void SHADE::evaluatePopulation(vector< vector<float> >& population, vector<tFitness>& fitness)
 {
 	fitness.resize(population.size());
-	//#pragma omp parallel for num_threads(this->numThreads)
 	for (int i = 0; i < population.size(); i++)
 	{
 		vector< float > xp(decomposer.coordinates.size());
