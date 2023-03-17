@@ -12,27 +12,26 @@
 //
 //=======================================================================================
 
-#define _USE_MATH_DEFINES
 #include "CCDE.h"
 #include <thread>
-#include <algorithm>    
+#include <algorithm>
 #include <set>
 #include <vector>
 #include <random>
-#include <map>
 #include <omp.h>
-#include <stdlib.h>     
-#include <time.h>       
-#include <iostream>      
-#include <fstream>      
+#include <cstdlib>
+#include <ctime>
+#include <iostream>
+#include <fstream>
 #include "KFoldCrossValidation.h"
 #include "MinMaxScaler.h"
 #include <cmath>
 #include "matrix.h"
 
 
-vector<matrix*> distances_buff;
+vector<matrix *> distances_buff;
 
+string data_path_prefix = "../";
 
 using namespace std;
 typedef vector<vector<float>> mat;
@@ -40,7 +39,7 @@ typedef vector<vector<float>> mat;
 mat dataset_features;
 vector<int> dataset_labels;
 
-//Part of the original dataset used by the feature selection algorithnm
+//Part of the original dataset used by the feature selection algorithm
 mat train_features;
 vector<int> train_labels;
 vector<mat> train_features_folds;
@@ -48,7 +47,7 @@ vector<vector<int>> train_labels_folds;
 vector<mat> test_features_folds;
 vector<vector<int>> test_labels_folds;
 
-//Part of the original dataset used for evaluating the result of the feature selection algorithnm
+//Part of the original dataset used for evaluating the result of the feature selection algorithm
 mat evaluation_features;
 vector<int> evaluation_labels;
 vector<mat> evaluation_train_features_folds;
@@ -56,23 +55,35 @@ vector<vector<int>> evaluation_train_labels_folds;
 vector<mat> evaluation_test_features_folds;
 vector<vector<int>> evaluation_test_labels_folds;
 
-float elapsedTimeFit = 0;
 unsigned num_classes;
-unsigned  problem_dimension = 1000;
+unsigned problem_dimension = 1000;
 string dataset_name = "";
 
-enum  Dataset1
-{
-	LEUKEMIA_1 = 0, DLBCL, _9_TUMOR, BRAIN_TUMOR_1, PROSTATE_TUMOR, LEUKEMIA_2, BRAIN_TUMOR_2, LEUKEMIA_3,
-	_11_TUMOR, LUNGC
+enum Dataset1 {
+    LEUKEMIA_1 = 0,
+    DLBCL, _9_TUMOR,
+    BRAIN_TUMOR_1,
+    PROSTATE_TUMOR,
+    LEUKEMIA_2,
+    BRAIN_TUMOR_2,
+    LEUKEMIA_3,
+    _11_TUMOR, LUNGC
 };
 
-enum Dataset2
-{
-	GrammaticalFacialExpression = 0, SemeionHandwrittenDigit, Isolet5, MultipleFeaturesDigit, HAPT, Har, UJIIndoorLoc, MadelonValid, OpticalRecognitionofHandWritten,
-	ConnectionistBenchData, WDBC, LungCancer
+enum Dataset2 {
+    GrammaticalFacialExpression = 0,
+    SemeionHandwrittenDigit,
+    Isolet5,
+    MultipleFeaturesDigit,
+    HAPT,
+    Har,
+    UJIIndoorLoc,
+    MadelonValid,
+    OpticalRecognitionofHandWritten,
+    ConnectionistBenchData,
+    WDBC,
+    LungCancer
 };
-
 
 
 int n_folds = 2;
@@ -96,39 +107,32 @@ float w2 = 0.1;
 *
 * \return The number of unique classes in the dataset.
 */
-unsigned int read_csv(const std::string& filename, std::vector<std::vector<float>>& data, std::vector<int>& labels)
-{
-	std::ifstream file(filename);
+unsigned int read_csv(const std::string &filename, std::vector<std::vector<float>> &data, std::vector<int> &labels) {
+    std::ifstream file(filename);
 
-	if (file)
-	{
-		std::string line;
-		std::set<unsigned int> label_set; // Use set to keep track of unique labels
-		while (std::getline(file, line))
-		{
-			std::vector<float> row;
-			unsigned int label;
-			std::stringstream ss(line);
-			std::string value;
-			while (std::getline(ss, value, ','))
-			{
-				if (!ss.eof())
-					row.push_back(std::stod(value));
-				else
-				{
-					label = std::stoi(value);
-					label_set.insert(label); // Add label to set
-				}
-			}
-			data.push_back(row);
-			labels.push_back(label);
-		}
-		return label_set.size();
-	}
-	else
-		throw std::runtime_error("Could not open file: " + filename);
+    if (file) {
+        std::string line;
+        std::set<unsigned int> label_set; // Use set to keep track of unique labels
+        while (std::getline(file, line)) {
+            std::vector<float> row;
+            unsigned int label;
+            std::stringstream ss(line);
+            std::string value;
+            while (std::getline(ss, value, ',')) {
+                if (!ss.eof())
+                    row.push_back(std::stod(value));
+                else {
+                    label = std::stoi(value);
+                    label_set.insert(label); // Add label to set
+                }
+            }
+            data.push_back(row);
+            labels.push_back(label);
+        }
+        return label_set.size();
+    } else
+        throw std::runtime_error("Could not open file: " + filename);
 }
-
 
 
 /**
@@ -145,40 +149,33 @@ unsigned int read_csv(const std::string& filename, std::vector<std::vector<float
  *
  * \return The number of unique classes in the dataset.
  */
-unsigned int read_tabular_data(const std::string& filename, std::vector<std::vector<float>>& data, std::vector<int>& labels)
-{
-	std::ifstream file(filename);
+unsigned int
+read_tabular_data(const std::string &filename, std::vector<std::vector<float>> &data, std::vector<int> &labels) {
+    std::ifstream file(filename);
 
-	if (file) {
-		std::string line;
-		std::set<unsigned int> label_set; // Use set to keep track of unique labels
-		while (std::getline(file, line))
-		{
-			std::vector<float> row;
-			unsigned int label;
-			std::stringstream ss(line);
-			std::string value;
-			while (ss >> value)
-			{
-				if (!ss.eof())
-				{
-					row.push_back(std::stod(value));
-				}
-				else
-				{
-					label = std::stoi(value);
-					label_set.insert(label); // Add label to set
-				}
-			}
-			data.push_back(row);
-			labels.push_back(label);
-		}
-		return label_set.size();
-	}
-	else
-	{
-		throw std::runtime_error("Could not open file: " + filename);
-	}
+    if (file) {
+        std::string line;
+        std::set<unsigned int> label_set; // Use set to keep track of unique labels
+        while (std::getline(file, line)) {
+            std::vector<float> row;
+            unsigned int label;
+            std::stringstream ss(line);
+            std::string value;
+            while (ss >> value) {
+                if (!ss.eof()) {
+                    row.push_back(std::stod(value));
+                } else {
+                    label = std::stoi(value);
+                    label_set.insert(label); // Add label to set
+                }
+            }
+            data.push_back(row);
+            labels.push_back(label);
+        }
+        return label_set.size();
+    } else {
+        throw std::runtime_error("Could not open file: " + filename);
+    }
 }
 
 
@@ -201,47 +198,41 @@ unsigned int read_tabular_data(const std::string& filename, std::vector<std::vec
  *
  * \note The output vectors are cleared before being populated by the function.
  */
-void stratified_split(const mat& samples, const std::vector<int>& labels, float split_ratio,
-	mat& train_samples, std::vector<int>& train_labels,
-	mat& test_samples, std::vector<int>& test_labels)
-{
-	// Count the number of samples for each class
-	std::vector<int> class_count(*std::max_element(labels.begin(), labels.end()) + 1, 0);
-	for (int label : labels)
-		class_count[label]++;
+void stratified_split(const mat &samples, const std::vector<int> &labels, float split_ratio,
+                      mat &train_samples, std::vector<int> &train_labels,
+                      mat &test_samples, std::vector<int> &test_labels) {
+    // Count the number of samples for each class
+    std::vector<int> class_count(*std::max_element(labels.begin(), labels.end()) + 1, 0);
+    for (int label: labels)
+        class_count[label]++;
 
-	// Compute the number of samples to include in the train set for each class
-	std::vector<int> train_class_count(class_count.size(), 0);
-	for (size_t i = 0; i < class_count.size(); i++)
-		train_class_count[i] = static_cast<int>(class_count[i] * split_ratio);
+    // Compute the number of samples to include in the train set for each class
+    std::vector<int> train_class_count(class_count.size(), 0);
+    for (size_t i = 0; i < class_count.size(); i++)
+        train_class_count[i] = static_cast<int>(class_count[i] * split_ratio);
 
-	// Initialize the train and test sets
-	train_samples.clear();
-	train_labels.clear();
-	test_samples.clear();
-	test_labels.clear();
+    // Initialize the train and test sets
+    train_samples.clear();
+    train_labels.clear();
+    test_samples.clear();
+    test_labels.clear();
 
-	// Iterate over the samples and add them to the train or test set
-	std::vector<int> train_count(class_count.size(), 0);
-	for (size_t i = 0; i < samples.size(); i++)
-	{
-		int label = labels[i];
-		if (train_count[label] < train_class_count[label])
-		{
-			// Add the sample to the train set
-			train_features.push_back(samples[i]);
-			train_labels.push_back(label);
-			train_count[label]++;
-		}
-		else
-		{
-			// Add the sample to the test set
-			test_samples.push_back(samples[i]);
-			test_labels.push_back(label);
-		}
-	}
+    // Iterate over the samples and add them to the train or test set
+    std::vector<int> train_count(class_count.size(), 0);
+    for (size_t i = 0; i < samples.size(); i++) {
+        int label = labels[i];
+        if (train_count[label] < train_class_count[label]) {
+            // Add the sample to the train set
+            train_features.push_back(samples[i]);
+            train_labels.push_back(label);
+            train_count[label]++;
+        } else {
+            // Add the sample to the test set
+            test_samples.push_back(samples[i]);
+            test_labels.push_back(label);
+        }
+    }
 }
-
 
 
 /**
@@ -262,147 +253,143 @@ void stratified_split(const mat& samples, const std::vector<int>& labels, float 
 *
 * \param d The `Dataset1` enum specifying the problem to be initialized.
 */
-void initDataset1(Dataset1 d)
-{
-	string filename;
+void initDataset1(Dataset1 d) {
+    string filename;
 
-	dataset_features.clear();
-	dataset_labels.clear();
-	train_features.clear();
-	train_labels.clear();
-	evaluation_labels.clear();
-	evaluation_features.clear();
-	test_features_folds.clear();
-	test_labels_folds.clear();
-	train_features_folds.clear();
-	train_labels_folds.clear();
-	evaluation_test_features_folds.clear();
-	evaluation_test_labels_folds.clear();
-	evaluation_train_features_folds.clear();
-	evaluation_train_labels_folds.clear();
+    dataset_features.clear();
+    dataset_labels.clear();
+    train_features.clear();
+    train_labels.clear();
+    evaluation_labels.clear();
+    evaluation_features.clear();
+    test_features_folds.clear();
+    test_labels_folds.clear();
+    train_features_folds.clear();
+    train_labels_folds.clear();
+    evaluation_test_features_folds.clear();
+    evaluation_test_labels_folds.clear();
+    evaluation_train_features_folds.clear();
+    evaluation_train_labels_folds.clear();
 
-	switch (d) {
-	case LEUKEMIA_1:
-		dataset_name = "LEUKEMIA_1";
-		filename = "dataset1/leukemia_1.csv";
-		break;
-	case DLBCL:
-		dataset_name = "DLBCL";
-		filename = "dataset1/DLBCL.csv";
-		break;
-	case _9_TUMOR:
-		dataset_name = "9_TUMOR";
-		filename = "dataset1/9_tumor.csv";
-		break;
-	case BRAIN_TUMOR_1:
-		dataset_name = "BRAIN_TUMOR_1";
-		filename = "dataset1/brain_tumor_1.csv";
-		break;
-	case PROSTATE_TUMOR:
-		dataset_name = "PROSTATE_TUMOR";
-		filename = "dataset1/prostate_tumor_1.csv";
-		break;
-	case LEUKEMIA_2:
-		dataset_name = "LEUKEMIA_2";
-		filename = "dataset1/leukemia_2.csv";
-		break;
-	case BRAIN_TUMOR_2:
-		dataset_name = "BRAIN_TUMOR_2";
-		filename = "dataset1/brain_tumor_2.csv";
-		break;
-	case LEUKEMIA_3:
-		dataset_name = "LEUKEMIA_3";
-		filename = "dataset1/leukemia_3.csv";
-		break;
-	case _11_TUMOR:
-		dataset_name = "_11_TUMOR";
-		filename = "dataset1/11_tumor.csv";
-		break;
-	case LUNGC:
-		dataset_name = "LUNGC";
-		filename = "dataset1/lungc.csv";
-		break;
-	default:
-		cout << "Unable to find problem" << endl;
-		exit(1);
-	}
+    switch (d) {
+        case LEUKEMIA_1:
+            dataset_name = "LEUKEMIA_1";
+            filename = "dataset1/leukemia_1.csv";
+            break;
+        case DLBCL:
+            dataset_name = "DLBCL";
+            filename = "dataset1/DLBCL.csv";
+            break;
+        case _9_TUMOR:
+            dataset_name = "9_TUMOR";
+            filename = "dataset1/9_tumor.csv";
+            break;
+        case BRAIN_TUMOR_1:
+            dataset_name = "BRAIN_TUMOR_1";
+            filename = "dataset1/brain_tumor_1.csv";
+            break;
+        case PROSTATE_TUMOR:
+            dataset_name = "PROSTATE_TUMOR";
+            filename = "dataset1/prostate_tumor_1.csv";
+            break;
+        case LEUKEMIA_2:
+            dataset_name = "LEUKEMIA_2";
+            filename = "dataset1/leukemia_2.csv";
+            break;
+        case BRAIN_TUMOR_2:
+            dataset_name = "BRAIN_TUMOR_2";
+            filename = "dataset1/brain_tumor_2.csv";
+            break;
+        case LEUKEMIA_3:
+            dataset_name = "LEUKEMIA_3";
+            filename = "dataset1/leukemia_3.csv";
+            break;
+        case _11_TUMOR:
+            dataset_name = "_11_TUMOR";
+            filename = "dataset1/11_tumor.csv";
+            break;
+        case LUNGC:
+            dataset_name = "LUNGC";
+            filename = "dataset1/lungc.csv";
+            break;
+        default:
+            cout << "Unable to find problem" << endl;
+            exit(1);
+    }
 
-	num_classes = read_csv(filename, dataset_features, dataset_labels);
+    num_classes = read_csv(data_path_prefix + filename, dataset_features, dataset_labels);
 
-	stratified_split(dataset_features, dataset_labels, 0.9,
-		train_features, train_labels,
-		evaluation_features, evaluation_labels);
+    stratified_split(dataset_features, dataset_labels, 0.9,
+                     train_features, train_labels,
+                     evaluation_features, evaluation_labels);
 
-	if (evaluation_features.size() < dataset_features.size() * 0.1)
-	{
-		stratified_split(dataset_features, dataset_labels, 0.85,
-			train_features, train_labels, evaluation_features, evaluation_labels);
+    if (evaluation_features.size() < dataset_features.size() * 0.1) {
+        stratified_split(dataset_features, dataset_labels, 0.85,
+                         train_features, train_labels, evaluation_features, evaluation_labels);
 
-		if (evaluation_features.size() < dataset_features.size() * 0.1)
-			stratified_split(dataset_features, dataset_labels, 0.80,
-				train_features, train_labels, evaluation_features, evaluation_labels);
-	}
+        if (evaluation_features.size() < dataset_features.size() * 0.1)
+            stratified_split(dataset_features, dataset_labels, 0.80,
+                             train_features, train_labels, evaluation_features, evaluation_labels);
+    }
 
 
-	vector<int> indices;
-	for (int i = 0; i < train_features.size(); ++i)
-		indices.push_back(i);
+    vector<int> indices;
+    for (int i = 0; i < train_features.size(); ++i)
+        indices.push_back(i);
 
-	KFoldCrossValidation<int> kFoldCrossValidation = KFoldCrossValidation<int>(indices, n_folds, time(0));
+    KFoldCrossValidation<int> kFoldCrossValidation = KFoldCrossValidation<int>(indices, n_folds, time(nullptr));
 
-	for (int i = 0; i < n_folds; ++i)
-	{
-		vector<int> testSample = kFoldCrossValidation.getTestFold(i);
-		vector<int> trainSample = kFoldCrossValidation.getTrainFold(i);
+    for (int i = 0; i < n_folds; ++i) {
+        vector<int> testSample = kFoldCrossValidation.getTestFold(i);
+        vector<int> trainSample = kFoldCrossValidation.getTrainFold(i);
 
-		mat train_data_f;
-		for (int i : trainSample) train_data_f.push_back(train_features[i]);
+        mat train_data_f;
+        for (int i: trainSample) train_data_f.push_back(train_features[i]);
 
-		mat test_data_f;
-		for (int i : testSample) test_data_f.push_back(train_features[i]);
+        mat test_data_f;
+        for (int i: testSample) test_data_f.push_back(train_features[i]);
 
-		vector<int> train_labels_f;
-		for (int i : trainSample) train_labels_f.push_back(train_labels[i]);
+        vector<int> train_labels_f;
+        for (int i: trainSample) train_labels_f.push_back(train_labels[i]);
 
-		vector<int> test_labels_f;
-		for (int i : testSample) test_labels_f.push_back(train_labels[i]);
+        vector<int> test_labels_f;
+        for (int i: testSample) test_labels_f.push_back(train_labels[i]);
 
-		test_features_folds.push_back(test_data_f);
-		test_labels_folds.push_back(test_labels_f);
-		train_features_folds.push_back(train_data_f);
-		train_labels_folds.push_back(train_labels_f);
-	}
+        test_features_folds.push_back(test_data_f);
+        test_labels_folds.push_back(test_labels_f);
+        train_features_folds.push_back(train_data_f);
+        train_labels_folds.push_back(train_labels_f);
+    }
 
-	indices.clear();
-	for (int i = 0; i < evaluation_features.size(); ++i)
-		indices.push_back(i);
+    indices.clear();
+    for (int i = 0; i < evaluation_features.size(); ++i)
+        indices.push_back(i);
 
-	kFoldCrossValidation = KFoldCrossValidation<int>(indices, n_folds, time(0));
+    kFoldCrossValidation = KFoldCrossValidation<int>(indices, n_folds, time(0));
 
-	for (int i = 0; i < n_folds; ++i)
-	{
-		vector<int> testSample = kFoldCrossValidation.getTestFold(i);
-		vector<int> trainSample = kFoldCrossValidation.getTrainFold(i);
+    for (int i = 0; i < n_folds; ++i) {
+        vector<int> testSample = kFoldCrossValidation.getTestFold(i);
+        vector<int> trainSample = kFoldCrossValidation.getTrainFold(i);
 
-		mat train_data_f;
-		for (int i : trainSample) train_data_f.push_back(evaluation_features[i]);
+        mat train_data_f;
+        for (int i: trainSample) train_data_f.push_back(evaluation_features[i]);
 
-		mat test_data_f;
-		for (int i : testSample) test_data_f.push_back(evaluation_features[i]);
+        mat test_data_f;
+        for (int i: testSample) test_data_f.push_back(evaluation_features[i]);
 
-		vector<int> train_labels_f;
-		for (int i : trainSample) train_labels_f.push_back(evaluation_labels[i]);
+        vector<int> train_labels_f;
+        for (int i: trainSample) train_labels_f.push_back(evaluation_labels[i]);
 
-		vector<int> test_labels_f;
-		for (int i : testSample) test_labels_f.push_back(evaluation_labels[i]);
+        vector<int> test_labels_f;
+        for (int i: testSample) test_labels_f.push_back(evaluation_labels[i]);
 
-		evaluation_test_features_folds.push_back(test_data_f);
-		evaluation_test_labels_folds.push_back(test_labels_f);
-		evaluation_train_features_folds.push_back(train_data_f);
-		evaluation_train_labels_folds.push_back(train_labels_f);
-	}
+        evaluation_test_features_folds.push_back(test_data_f);
+        evaluation_test_labels_folds.push_back(test_labels_f);
+        evaluation_train_features_folds.push_back(train_data_f);
+        evaluation_train_labels_folds.push_back(train_labels_f);
+    }
 
-	problem_dimension = train_features[0].size();
+    problem_dimension = train_features[0].size();
 }
 
 
@@ -415,147 +402,169 @@ void initDataset1(Dataset1 d)
 *
 * \param d - Enumeration value specifying which dataset to initialize.
 */
-void initDataset2(Dataset2 d)
-{
-	string trainingdata_filename;
-	string testingdata_filename;
+void initDataset2(Dataset2 d) {
+    string trainingdata_filename;
+    string testingdata_filename;
 
-	train_features.clear();
-	train_labels.clear();
-	evaluation_features.clear();
-	evaluation_labels.clear();
-	test_features_folds.clear();
-	test_labels_folds.clear();
-	train_features_folds.clear();
-	train_labels_folds.clear();
-	evaluation_test_features_folds.clear();
-	evaluation_test_labels_folds.clear();
-	evaluation_train_features_folds.clear();
-	evaluation_train_labels_folds.clear();
+    train_features.clear();
+    train_labels.clear();
+    evaluation_features.clear();
+    evaluation_labels.clear();
+    test_features_folds.clear();
+    test_labels_folds.clear();
+    train_features_folds.clear();
+    train_labels_folds.clear();
+    evaluation_test_features_folds.clear();
+    evaluation_test_labels_folds.clear();
+    evaluation_train_features_folds.clear();
+    evaluation_train_labels_folds.clear();
 
-	switch (d) {
-	case GrammaticalFacialExpression:
-		dataset_name = "grammatical facial expression";
-		trainingdata_filename = "dataset2/trainingdata/grammatical_facial_expression01.txt";
-		testingdata_filename = "dataset2/testingdata/grammatical_facial_expression01.txt";
-		break;
-	case SemeionHandwrittenDigit:
-		dataset_name = "SemeionHandwrittenDigit";
-		trainingdata_filename = "dataset2/trainingdata/SemeionHandwrittenDigit.txt";
-		testingdata_filename = "dataset2/testingdata/SemeionHandwrittenDigit.txt";
-		break;
-	case Isolet5:
-		dataset_name = "isolet5";
-		trainingdata_filename = "dataset2/trainingdata/isolet5.txt";
-		testingdata_filename = "dataset2/testingdata/isolet5.txt";
-		break;
-	case MultipleFeaturesDigit:
-		dataset_name = "MultipleFeaturesDigit";
-		trainingdata_filename = "dataset2/trainingdata/MultipleFeaturesDigit.txt";
-		testingdata_filename = "dataset2/testingdata/MultipleFeaturesDigit.txt";
-		break;
-	case HAPT:
-		dataset_name = "HAPTDataSet";
-		trainingdata_filename = "dataset2/trainingdata/HAPTDataSet.txt";
-		testingdata_filename = "dataset2/testingdata/HAPTDataSet.txt";
-		break;
-	case Har:
-		dataset_name = "har";
-		trainingdata_filename = "dataset2/trainingdata/har.txt";
-		testingdata_filename = "dataset2/testingdata/har.txt";
-		break;
-	case UJIIndoorLoc:
-		dataset_name = "UJIIndoorLoc";
-		trainingdata_filename = "dataset2/trainingdata/UJIIndoorLoc_training.txt";
-		testingdata_filename = "dataset2/testingdata/UJIIndoorLoc_validation.txt";
-		break;
-	default:
-		dataset_name = "Invalid dataset";
-		trainingdata_filename = "";
-		testingdata_filename = "";
-		break;
-	}
+    switch (d) {
+        case GrammaticalFacialExpression:
+            dataset_name = "grammatical facial expression";
+            trainingdata_filename = "dataset2/trainingdata/grammatical_facial_expression01.txt";
+            testingdata_filename = "dataset2/testingdata/grammatical_facial_expression01.txt";
+            break;
+        case SemeionHandwrittenDigit:
+            dataset_name = "SemeionHandwrittenDigit";
+            trainingdata_filename = "dataset2/trainingdata/SemeionHandwrittenDigit.txt";
+            testingdata_filename = "dataset2/testingdata/SemeionHandwrittenDigit.txt";
+            break;
+        case Isolet5:
+            dataset_name = "isolet5";
+            trainingdata_filename = "dataset2/trainingdata/isolet5.txt";
+            testingdata_filename = "dataset2/testingdata/isolet5.txt";
+            break;
+        case MultipleFeaturesDigit:
+            dataset_name = "MultipleFeaturesDigit";
+            trainingdata_filename = "dataset2/trainingdata/MultipleFeaturesDigit.txt";
+            testingdata_filename = "dataset2/testingdata/MultipleFeaturesDigit.txt";
+            break;
+        case HAPT:
+            dataset_name = "HAPTDataSet";
+            trainingdata_filename = "dataset2/trainingdata/HAPTDataSet.txt";
+            testingdata_filename = "dataset2/testingdata/HAPTDataSet.txt";
+            break;
+        case Har:
+            dataset_name = "har";
+            trainingdata_filename = "dataset2/trainingdata/har.txt";
+            testingdata_filename = "dataset2/testingdata/har.txt";
+            break;
+        case UJIIndoorLoc:
+            dataset_name = "UJIIndoorLoc";
+            trainingdata_filename = "dataset2/trainingdata/UJIIndoorLoc_training.txt";
+            testingdata_filename = "dataset2/testingdata/UJIIndoorLoc_validation.txt";
+            break;
+        case MadelonValid:
+            dataset_name = "MadelonValid";
+            trainingdata_filename = "dataset2/trainingdata/MadelonValid.txt";
+            testingdata_filename = "dataset2/testingdata/MadelonValid.txt";
+            break;
+        case OpticalRecognitionofHandWritten:
+            dataset_name = "OpticalRecognitionofHandwritten";
+            trainingdata_filename = "dataset2/trainingdata/OpticalRecognitionofHandwritten.txt";
+            testingdata_filename = "dataset2/testingdata/OpticalRecognitionofHandwritten.txt";
+            break;
+        case ConnectionistBenchData:
+            dataset_name = "ConnectionistBenchData";
+            trainingdata_filename = "dataset2/trainingdata/ConnectionistBenchData.txt";
+            testingdata_filename = "dataset2/testingdata/ConnectionistBenchData.txt";
+            break;
+        case WDBC:
+            dataset_name = "wdbc";
+            trainingdata_filename = "dataset2/trainingdata/wdbc.txt";
+            testingdata_filename = "dataset2/testingdata/wdbc.txt";
+            break;
+        case LungCancer:
+            dataset_name = "LungCancer";
+            trainingdata_filename = "dataset2/trainingdata/LungCancer.txt";
+            testingdata_filename = "dataset2/testingdata/LungCancer.txt";
+            break;
+        default:
+            dataset_name = "Invalid dataset";
+            trainingdata_filename = "";
+            testingdata_filename = "";
+            break;
+    }
 
-	mat train_data_0;
-	mat test_data_0;
+    mat train_data_0;
+    mat test_data_0;
 
-	num_classes = max(read_tabular_data(trainingdata_filename, train_features, train_labels),
-		read_tabular_data(testingdata_filename, evaluation_features, evaluation_labels));
+    num_classes = max(read_tabular_data(data_path_prefix + trainingdata_filename, train_features, train_labels),
+                      read_tabular_data(data_path_prefix + testingdata_filename, evaluation_features,
+                                        evaluation_labels));
 
-	vector<int> all_labels(train_labels);
-	std::copy(evaluation_labels.begin(), evaluation_labels.end(), std::back_inserter(all_labels));
-	int min_label = *min_element(all_labels.begin(), all_labels.end());
+    vector<int> all_labels(train_labels);
+    std::copy(evaluation_labels.begin(), evaluation_labels.end(), std::back_inserter(all_labels));
+    int min_label = *min_element(all_labels.begin(), all_labels.end());
 
-	std::for_each(train_labels.begin(), train_labels.end(), [min_label](int& elem) {	elem -= min_label;	});
-	std::for_each(evaluation_labels.begin(), evaluation_labels.end(), [min_label](int& elem) {	elem -= min_label;	});
+    std::for_each(train_labels.begin(), train_labels.end(), [min_label](int &elem) { elem -= min_label; });
+    std::for_each(evaluation_labels.begin(), evaluation_labels.end(), [min_label](int &elem) { elem -= min_label; });
 
-	mat all_features(train_features);
-	std::copy(evaluation_features.begin(), evaluation_features.end(), std::back_inserter(all_features));
+    mat all_features(train_features);
+    std::copy(evaluation_features.begin(), evaluation_features.end(), std::back_inserter(all_features));
 
-	MinMaxScaler scaler;
-	scaler.fit(all_features);
-	train_features = scaler.transform(train_features);
-	evaluation_features = scaler.transform(evaluation_features);
+    MinMaxScaler scaler;
+    scaler.fit(all_features);
+    train_features = scaler.transform(train_features);
+    evaluation_features = scaler.transform(evaluation_features);
 
-	vector<int> indices;
-	for (int i = 0; i < train_features.size(); ++i)	indices.push_back(i);
+    vector<int> indices;
+    for (int i = 0; i < train_features.size(); ++i) indices.push_back(i);
 
-	KFoldCrossValidation<int> kFoldCrossValidation = KFoldCrossValidation<int>(indices, n_folds, time(0));
-	for (int i = 0; i < n_folds; ++i)
-	{
-		vector<int> testSample = kFoldCrossValidation.getTestFold(i);
-		vector<int> trainSample = kFoldCrossValidation.getTrainFold(i);
+    KFoldCrossValidation<int> kFoldCrossValidation = KFoldCrossValidation<int>(indices, n_folds, time(0));
+    for (int i = 0; i < n_folds; ++i) {
+        vector<int> testSample = kFoldCrossValidation.getTestFold(i);
+        vector<int> trainSample = kFoldCrossValidation.getTrainFold(i);
 
-		mat train_data_f;
-		for (int i : trainSample) train_data_f.push_back(train_features[i]);
+        mat train_data_f;
+        for (int i: trainSample) train_data_f.push_back(train_features[i]);
 
-		mat test_data_f;
-		for (int i : testSample) test_data_f.push_back(train_features[i]);
+        mat test_data_f;
+        for (int i: testSample) test_data_f.push_back(train_features[i]);
 
-		vector<int> train_labels_f;
-		for (int i : trainSample) train_labels_f.push_back(train_labels[i]);
+        vector<int> train_labels_f;
+        for (int i: trainSample) train_labels_f.push_back(train_labels[i]);
 
-		vector<int> test_labels_f;
-		for (int i : testSample) test_labels_f.push_back(train_labels[i]);
+        vector<int> test_labels_f;
+        for (int i: testSample) test_labels_f.push_back(train_labels[i]);
 
-		test_features_folds.push_back(test_data_f);
-		test_labels_folds.push_back(test_labels_f);
-		train_features_folds.push_back(train_data_f);
-		train_labels_folds.push_back(train_labels_f);
-	}
-
-
-	indices.clear();
-	for (int i = 0; i < evaluation_features.size(); ++i) indices.push_back(i);
-
-	kFoldCrossValidation = KFoldCrossValidation<int>(indices, n_folds, time(0));
-	for (int i = 0; i < n_folds; ++i)
-	{
-		vector<int> testSample = kFoldCrossValidation.getTestFold(i);
-		vector<int> trainSample = kFoldCrossValidation.getTrainFold(i);
-
-		mat train_data_f;
-		for (int i : trainSample) train_data_f.push_back(evaluation_features[i]);
-
-		mat test_data_f;
-		for (int i : testSample) test_data_f.push_back(evaluation_features[i]);
-
-		vector<int> train_labels_f;
-		for (int i : trainSample) train_labels_f.push_back(evaluation_labels[i]);
-
-		vector<int> test_labels_f;
-		for (int i : testSample) test_labels_f.push_back(evaluation_labels[i]);
+        test_features_folds.push_back(test_data_f);
+        test_labels_folds.push_back(test_labels_f);
+        train_features_folds.push_back(train_data_f);
+        train_labels_folds.push_back(train_labels_f);
+    }
 
 
-		evaluation_test_features_folds.push_back(test_data_f);
-		evaluation_test_labels_folds.push_back(test_labels_f);
-		evaluation_train_features_folds.push_back(train_data_f);
-		evaluation_train_labels_folds.push_back(train_labels_f);
-	}
+    indices.clear();
+    for (int i = 0; i < evaluation_features.size(); ++i) indices.push_back(i);
 
-	problem_dimension = train_features[0].size();
+    kFoldCrossValidation = KFoldCrossValidation<int>(indices, n_folds, time(0));
+    for (int i = 0; i < n_folds; ++i) {
+        vector<int> testSample = kFoldCrossValidation.getTestFold(i);
+        vector<int> trainSample = kFoldCrossValidation.getTrainFold(i);
+
+        mat train_data_f;
+        for (int i: trainSample) train_data_f.push_back(evaluation_features[i]);
+
+        mat test_data_f;
+        for (int i: testSample) test_data_f.push_back(evaluation_features[i]);
+
+        vector<int> train_labels_f;
+        for (int i: trainSample) train_labels_f.push_back(evaluation_labels[i]);
+
+        vector<int> test_labels_f;
+        for (int i: testSample) test_labels_f.push_back(evaluation_labels[i]);
+
+
+        evaluation_test_features_folds.push_back(test_data_f);
+        evaluation_test_labels_folds.push_back(test_labels_f);
+        evaluation_train_features_folds.push_back(train_data_f);
+        evaluation_train_labels_folds.push_back(train_labels_f);
+    }
+
+    problem_dimension = train_features[0].size();
 }
-
 
 
 /**
@@ -568,28 +577,25 @@ void initDataset2(Dataset2 d)
  * \param active_features_flag vector of 0/1 for deactivate/activate the corresponding feature
  * \return computed distance
  */
-float compute_distance(vector<vector<float>>& ref,
-	vector<vector<float>>& query,
-	int   ref_index,
-	int   query_index,
-	vector<int>& active_features_flag)
-{
-	float sum = 0.0;
-	int dim = ref[0].size();
-	int* pf = &(active_features_flag[0]);
-	float* rd = &(ref[ref_index][0]);
-	float* qd = &(query[query_index][0]);
-	for (int d = 0; d < dim; ++d)
-	{
-		float x1 = *rd++;
-		float x2 = *qd++;
-		if (*pf++ > 0)
-		{
-			float diff = x1 - x2;
-			sum += diff * diff;
-		}
-	}
-	return sqrtf(sum);
+float compute_distance(vector<vector<float>> &ref,
+                       vector<vector<float>> &query,
+                       int ref_index,
+                       int query_index,
+                       vector<int> &active_features_flag) {
+    float sum = 0.0;
+    int dim = ref[0].size();
+    int *pf = &(active_features_flag[0]);
+    float *rd = &(ref[ref_index][0]);
+    float *qd = &(query[query_index][0]);
+    for (int d = 0; d < dim; ++d) {
+        float x1 = *rd++;
+        float x2 = *qd++;
+        if (*pf++ > 0) {
+            float diff = x1 - x2;
+            sum += diff * diff;
+        }
+    }
+    return sqrtf(sum);
 }
 
 
@@ -602,23 +608,20 @@ float compute_distance(vector<vector<float>>& ref,
  * \param query_index  index to the query point to consider
   * \return computed distance
  */
-float compute_distance(vector<vector<float>>& ref,
-	vector<vector<float>>& query,
-	int   ref_index,
-	int   query_index)
-{
-	float sum = 0.0;
-	int dim = ref[0].size();
-	float* rd = &(ref[ref_index][0]);
-	float* qd = &(query[query_index][0]);
-	for (int d = 0; d < dim; ++d)
-	{
-		float diff = *rd++ - *qd++;
-		sum += diff * diff;
-	}
-	return sqrtf(sum);
+float compute_distance(vector<vector<float>> &ref,
+                       vector<vector<float>> &query,
+                       int ref_index,
+                       int query_index) {
+    float sum = 0.0;
+    int dim = ref[0].size();
+    float *rd = &(ref[ref_index][0]);
+    float *qd = &(query[query_index][0]);
+    for (int d = 0; d < dim; ++d) {
+        float diff = *rd++ - *qd++;
+        sum += diff * diff;
+    }
+    return sqrtf(sum);
 }
-
 
 
 /**
@@ -630,37 +633,33 @@ float compute_distance(vector<vector<float>>& ref,
  * \param index   vector containing the index of the k smallest distances
  * \param k       number of smallest distances to locate
  */
-void  k_insertion_sort(int length, float* dist, vector<int>& index, int k)
-{
-	// Initialise the first index
-	index[0] = 0;
+void k_insertion_sort(int length, float *dist, vector<int> &index, int k) {
+    // Initialise the first index
+    index[0] = 0;
 
-	// Go through all points
-	for (int i = 1; i < length; ++i)
-	{
-		// Store current distance and associated index
-		float curr_dist = dist[i];
-		int   curr_index = i;
+    // Go through all points
+    for (int i = 1; i < length; ++i) {
+        // Store current distance and associated index
+        float curr_dist = dist[i];
+        int curr_index = i;
 
-		// Skip the current value if its index is >= k and if it's higher the k-th already sorted smallest value
-		if (i >= k && curr_dist >= dist[k - 1])
-			continue;
+        // Skip the current value if its index is >= k and if it's higher the k-th already sorted smallest value
+        if (i >= k && curr_dist >= dist[k - 1])
+            continue;
 
-		// Shift values (and indexes) higher that the current distance to the right
-		int j = min(i, k - 1);
-		while (j > 0 && dist[j - 1] > curr_dist)
-		{
-			dist[j] = dist[j - 1];
-			index[j] = index[j - 1];
-			--j;
-		}
+        // Shift values (and indexes) higher that the current distance to the right
+        int j = min(i, k - 1);
+        while (j > 0 && dist[j - 1] > curr_dist) {
+            dist[j] = dist[j - 1];
+            index[j] = index[j - 1];
+            --j;
+        }
 
-		// Write the current distance and index at their position
-		dist[j] = curr_dist;
-		index[j] = curr_index;
-	}
+        // Write the current distance and index at their position
+        dist[j] = curr_dist;
+        index[j] = curr_index;
+    }
 }
-
 
 
 /*
@@ -673,53 +672,45 @@ void  k_insertion_sort(int length, float* dist, vector<int>& index, int k)
  * \param knn_index  output array containing the query_nb x k indexes
  * \param active_features_flag vector of 0/1 for deactivate/activate the corresponding feature
  */
-void knn(vector<vector<float>>& ref,
-	vector<vector<float>>& query,
-	int k,
-	vector<vector<float>>& knn_dist,
-	vector<vector<int>>& knn_index,
-	vector<int>& active_features_flag)
-{
-	int tid = omp_get_thread_num();
-	matrix& distances = *distances_buff[tid];
+void knn(vector<vector<float>> &ref,
+         vector<vector<float>> &query,
+         int k,
+         vector<vector<float>> &knn_dist,
+         vector<vector<int>> &knn_index,
+         vector<int> &active_features_flag) {
+    int tid = omp_get_thread_num();
+    matrix &distances = *distances_buff[tid];
 
-	//compute all distances	
-	if (&ref == &query)
-	{
-		for (int i = 0; i < query.size(); ++i)
-			for (int j = 0; j < ref.size(); ++j)
-				if (i == j)
-					distances[i][j] = 0.0;
-				else
-					if (i > j)
-						distances[i][j] = distances[j][i];
-					else
-						distances[i][j] = compute_distance(ref, query, j, i, active_features_flag);
-	}
-	else
-	{
-		for (int i = 0; i < query.size(); ++i)
-			for (int j = 0; j < ref.size(); ++j)
-				distances[i][j] = compute_distance(ref, query, j, i, active_features_flag);
-	}
+    //compute all distances
+    if (&ref == &query) {
+        for (int i = 0; i < query.size(); ++i)
+            for (int j = 0; j < ref.size(); ++j)
+                if (i == j)
+                    distances[i][j] = 0.0;
+                else if (i > j)
+                    distances[i][j] = distances[j][i];
+                else
+                    distances[i][j] = compute_distance(ref, query, j, i, active_features_flag);
+    } else {
+        for (int i = 0; i < query.size(); ++i)
+            for (int j = 0; j < ref.size(); ++j)
+                distances[i][j] = compute_distance(ref, query, j, i, active_features_flag);
+    }
 
-	knn_dist.resize(query.size(), vector<float>(k));
-	knn_index.resize(query.size());
-	//Process one query point at a time
-	for (int i = 0; i < query.size(); ++i)
-	{
-		vector<int> index(ref.size(), 0);
-		std::iota(std::begin(index), std::end(index), 0);
-		k_insertion_sort(ref.size(), distances[i], index, k);
-		index.resize(k);
-		//knn_dist[i].resize(k);
-		for (int j = 0; j < k; ++j)
-			knn_dist[i][j] = distances[i][j];
-		knn_index[i] = index;
-	}
+    knn_dist.resize(query.size(), vector<float>(k));
+    knn_index.resize(query.size());
+    //Process one query point at a time
+    for (int i = 0; i < query.size(); ++i) {
+        vector<int> index(ref.size(), 0);
+        std::iota(std::begin(index), std::end(index), 0);
+        k_insertion_sort(ref.size(), distances[i], index, k);
+        index.resize(k);
+        //knn_dist[i].resize(k);
+        for (int j = 0; j < k; ++j)
+            knn_dist[i][j] = distances[i][j];
+        knn_index[i] = index;
+    }
 }
-
-
 
 
 /**
@@ -736,66 +727,57 @@ void knn(vector<vector<float>>& ref,
 * \param active_features_flag vector of flags indicating active features
 * \return Returns the balanced accuracy of the k - nearest neighbors classification.
 */
-tFitness knn_balanced_accuracy(int K, mat& train_data, vector<int>& train_labels,
-	mat& test_data, vector<int>& test_labels,
-	vector<int>& active_features_flag)
-{
+tFitness knn_balanced_accuracy(int K, mat &train_data, vector<int> &train_labels,
+                               mat &test_data, vector<int> &test_labels,
+                               vector<int> &active_features_flag) {
 
-	if (train_data.size() == 0)
-		return 0.0;
+    if (train_data.empty())
+        return 0.0;
 
-	int k = K;
-	bool loocv = false;
-	if (&train_data == &test_data && &train_labels == &test_labels)
-	{
-		loocv = true; //use leave-one-out cv	
-		k = k + 1;
-	}
-	vector<vector<float>> knn_dist;
-	vector<vector<int>> knn_index;
-	knn(train_data, test_data, k, knn_dist, knn_index, active_features_flag);
+    int k = K;
+    bool loocv = false;
+    if (&train_data == &test_data && &train_labels == &test_labels) {
+        loocv = true; //use leave-one-out cv
+        k = k + 1;
+    }
+    vector<vector<float>> knn_dist;
+    vector<vector<int>> knn_index;
+    knn(train_data, test_data, k, knn_dist, knn_index, active_features_flag);
 
 
-	vector<int> total(num_classes, 0);
-	vector<int> correct(num_classes, 0);
-	mat confusion_matrix(num_classes, std::vector<float>(num_classes, 0));
-	for (int i = 0; i < test_data.size(); ++i)
-	{
-		unsigned actual_lab = test_labels[i];
-		vector<int> counts(num_classes, 0);
-		for (int j = 0; j < k; ++j)
-		{
-			unsigned neigh_index = knn_index[i][j];
-			if (loocv && neigh_index == i) continue;
-			unsigned neigh_label = train_labels[neigh_index];
-			counts[neigh_label]++;
-		}
-		auto max_it = std::max_element(counts.begin(), counts.end());
-		unsigned predicted_lab = std::distance(counts.begin(), max_it);
-		if (predicted_lab == actual_lab)
-		{
-			correct[actual_lab]++;
-			confusion_matrix[predicted_lab][actual_lab]++;
-		}
-		total[actual_lab]++;
-	}
+    vector<int> total(num_classes, 0);
+    vector<int> correct(num_classes, 0);
+    mat confusion_matrix(num_classes, std::vector<float>(num_classes, 0));
+    for (int i = 0; i < test_data.size(); ++i) {
+        unsigned actual_lab = test_labels[i];
+        vector<int> counts(num_classes, 0);
+        for (int j = 0; j < k; ++j) {
+            unsigned neigh_index = knn_index[i][j];
+            if (loocv && neigh_index == i) continue;
+            unsigned neigh_label = train_labels[neigh_index];
+            counts[neigh_label]++;
+        }
+        auto max_it = std::max_element(counts.begin(), counts.end());
+        unsigned predicted_lab = std::distance(counts.begin(), max_it);
+        if (predicted_lab == actual_lab) {
+            correct[actual_lab]++;
+            confusion_matrix[predicted_lab][actual_lab]++;
+        }
+        total[actual_lab]++;
+    }
 
-	float cvAcc = 0.0;
-	int actual_num_classes = 0;
-	for (int i = 0; i < num_classes; ++i)
-	{
-		if (total[i] > 0)
-		{
-			cvAcc += float(correct[i]) / float(total[i]);
-			actual_num_classes++;
-		}
-	}
-	cvAcc /= actual_num_classes;
+    float cvAcc = 0.0;
+    int actual_num_classes = 0;
+    for (int i = 0; i < num_classes; ++i) {
+        if (total[i] > 0) {
+            cvAcc += float(correct[i]) / float(total[i]);
+            actual_num_classes++;
+        }
+    }
+    cvAcc /= actual_num_classes;
 
-	return cvAcc;
+    return cvAcc;
 }
-
-
 
 
 /**
@@ -810,156 +792,137 @@ tFitness knn_balanced_accuracy(int K, mat& train_data, vector<int>& train_labels
  *
  * \return The accuracy of the KNN classification as a fraction of correctly classified instances
  */
-tFitness knn_accuracy(int K, mat& train_data, vector<int>& train_labels,
-	mat& test_data, vector<int>& test_labels,
-	vector<int>& active_features_flag)
-{
-	int k = K;
-	bool loocv = false;
-	if (&train_data == &test_data && &train_labels == &test_labels)
-	{
-		loocv = true; //use leave-one-out cv	
-		k = k + 1;
-	}
+tFitness knn_accuracy(int K, mat &train_data, vector<int> &train_labels,
+                      mat &test_data, vector<int> &test_labels,
+                      vector<int> &active_features_flag) {
+    int k = K;
+    bool loocv = false;
+    if (&train_data == &test_data && &train_labels == &test_labels) {
+        loocv = true; //use leave-one-out cv
+        k = k + 1;
+    }
 
-	vector<vector<float>> knn_dist;
-	vector<vector<int>> knn_index;
-	knn(train_data, test_data, k, knn_dist, knn_index, active_features_flag);
+    vector<vector<float>> knn_dist;
+    vector<vector<int>> knn_index;
+    knn(train_data, test_data, k, knn_dist, knn_index, active_features_flag);
 
-	vector<int> total(num_classes, 0);
-	vector<int> correct(num_classes, 0);
-	mat confusion_matrix(num_classes, std::vector<float>(num_classes, 0));
-	unsigned total_correct = 0;
+    vector<int> total(num_classes, 0);
+    vector<int> correct(num_classes, 0);
+    mat confusion_matrix(num_classes, std::vector<float>(num_classes, 0));
+    unsigned total_correct = 0;
 
-	for (int i = 0; i < test_data.size(); ++i)
-	{
-		unsigned actual_lab = test_labels[i];
-		vector<int> counts(num_classes, 0);
-		for (int j = 0; j < k; ++j)
-		{
-			unsigned neigh_index = knn_index[i][j];
-			if (loocv && neigh_index == i) continue;
-			unsigned neigh_label = train_labels[neigh_index];
-			counts[neigh_label]++;
-		}
+    for (int i = 0; i < test_data.size(); ++i) {
+        unsigned actual_lab = test_labels[i];
+        vector<int> counts(num_classes, 0);
+        for (int j = 0; j < k; ++j) {
+            unsigned neigh_index = knn_index[i][j];
+            if (loocv && neigh_index == i) continue;
+            unsigned neigh_label = train_labels[neigh_index];
+            counts[neigh_label]++;
+        }
 
-		// Get the index of the maximum element
-		auto max_it = std::max_element(counts.begin(), counts.end());
-		unsigned predicted_lab = std::distance(counts.begin(), max_it);
-		if (predicted_lab == actual_lab)
-		{
-			total_correct++;
-			confusion_matrix[predicted_lab][actual_lab]++;
-		}
-	}
-	return ((float)total_correct) / test_data.size();
+        // Get the index of the maximum element
+        auto max_it = std::max_element(counts.begin(), counts.end());
+        unsigned predicted_lab = std::distance(counts.begin(), max_it);
+        if (predicted_lab == actual_lab) {
+            total_correct++;
+            confusion_matrix[predicted_lab][actual_lab]++;
+        }
+    }
+    return ((float) total_correct) / test_data.size();
 }
 
 
+tFitness evaluate_fitness_on_dataset(int dim, const float *x,
+                                     mat &train_dataset,
+                                     vector<int> &train_labels,
+                                     mat &test_dataset,
+                                     vector<int> &test_labels) {
+    tFitness f = 0;
+    int k = K;
+    bool loocv = false;
 
+    if (&test_dataset == &train_dataset && &test_labels == &train_labels) {
+        loocv = true; //use leave-one-out cv
+        k = k + 1;
+    }
 
-tFitness evaluate_fitness_on_dataset(int dim, float* x,
-	mat& train_dataset,
-	vector<int>& train_labels,
-	mat& test_dataset,
-	vector<int>& test_labels)
-{
-	tFitness f = 0;
-	int k = K;
-	bool loocv = false;
+    //Set the flags of active features using the threshold
+    vector<int> active_features_flag(dim, 1);
+    int realDim = dim;
+    for (int i = 0; i < dim; ++i)
+        if (x[i] < TH) {
+            active_features_flag[i] = 0.0;
+            realDim--;
+        }
 
-	if (&test_dataset == &train_dataset && &test_labels == &train_labels)
-	{
-		loocv = true; //use leave-one-out cv	
-		k = k + 1;
-	}
+    vector<vector<float>> knn_dist;
+    vector<vector<int>> knn_index;
+    knn(train_dataset, test_dataset, k, knn_dist, knn_index, active_features_flag);
 
-	//Set the flags of active features using the threshold 	
-	vector<int> active_features_flag(dim, 1);
-	int realDim = dim;
-	for (int i = 0; i < dim; ++i)
-		if (x[i] < TH)
-		{
-			active_features_flag[i] = 0.0;
-			realDim--;
-		}
+    //Computes metrics
+    float dist_same_label = 0, dist_diff_label = 0;
+    unsigned n_same_label = 0, n_diff_label = 0;
+    vector<unsigned> total(num_classes, 0);
+    vector<int> correct(num_classes, 0);
 
-	vector<vector<float>> knn_dist;
-	vector<vector<int>> knn_index;
-	knn(train_dataset, test_dataset, k, knn_dist, knn_index, active_features_flag);
+    for (int i = 0; i < test_dataset.size(); ++i) {
+        unsigned actual_lab = test_labels[i];
+        vector<int> count_neigh_labels(num_classes, 0);
+        for (int j = 0; j < k; ++j) {
+            unsigned neigh_index = knn_index[i][j];
 
-	//Computes metrics	
-	float dist_same_label = 0, dist_diff_label = 0;
-	unsigned n_same_label = 0, n_diff_label = 0;
-	vector<unsigned> total(num_classes, 0);
-	vector<int> correct(num_classes, 0);
+            if (loocv && neigh_index == i) continue;
 
-	for (int i = 0; i < test_dataset.size(); ++i)
-	{
-		unsigned actual_lab = test_labels[i];
-		vector<int> count_neigh_labels(num_classes, 0);
-		for (int j = 0; j < k; ++j)
-		{
-			unsigned neigh_index = knn_index[i][j];
+            float neigh_dist = knn_dist[i][j];
+            unsigned neigh_label = train_labels[neigh_index];
+            count_neigh_labels[neigh_label]++;
+            if (neigh_label == actual_lab) {
+                dist_same_label += neigh_dist;
+                n_same_label += 1;
+            } else {
+                dist_diff_label += neigh_dist;
+                n_diff_label += 1;
+            }
+        }
 
-			if (loocv && neigh_index == i) continue;
+        // Get the index of the maximum element
+        auto max_it = std::max_element(count_neigh_labels.begin(), count_neigh_labels.end());
+        unsigned predicted_lab = std::distance(count_neigh_labels.begin(), max_it);
+        {
+            if (predicted_lab == actual_lab) {
+                correct[actual_lab] += 1;
+            }
+            total[actual_lab] += 1;
+        }
+    }
 
-			float neigh_dist = knn_dist[i][j];
-			unsigned neigh_label = train_labels[neigh_index];
-			count_neigh_labels[neigh_label]++;
-			if (neigh_label == actual_lab)
-			{
-				dist_same_label += neigh_dist;
-				n_same_label += 1;
-			}
-			else
-			{
-				dist_diff_label += neigh_dist;
-				n_diff_label += 1;
-			}
-		}
+    // if the number of neighbours with a different label is zero
+    // then use the maximum possible distance in a space with n_rows features
+    // (note that all features are normalized in [0, 1]
+    if (n_diff_label)
+        dist_diff_label /= n_diff_label;
+    else
+        dist_diff_label = sqrt(train_dataset.size());
 
-		// Get the index of the maximum element
-		auto max_it = std::max_element(count_neigh_labels.begin(), count_neigh_labels.end());
-		unsigned predicted_lab = std::distance(count_neigh_labels.begin(), max_it);
-		{
-			if (predicted_lab == actual_lab)
-			{
-				correct[actual_lab] += 1;
-			}
-			total[actual_lab] += 1;
-		}
-	}
+    if (n_same_label)
+        dist_same_label /= n_same_label;
+    else
+        dist_same_label = sqrt(train_dataset.size());
 
-	// if the number of neighbours with a different label is zero 
-	// then use the maximum possible distance in a space with n_rows features
-	// (note that all features are normalized in [0, 1]
-	if (n_diff_label)
-		dist_diff_label /= n_diff_label;
-	else
-		dist_diff_label = sqrt(train_dataset.size());
-
-	if (n_same_label)
-		dist_same_label /= n_same_label;
-	else
-		dist_same_label = sqrt(train_dataset.size());
-
-	float cvAcc = 0.0;
-	int actual_num_classes = 0;
-	for (int i = 0; i < num_classes; ++i)
-	{
-		if (total[i] > 0)
-		{
-			cvAcc += float(correct[i]) / float(total[i]);
-			actual_num_classes++;
-		}
-	}
-	cvAcc /= actual_num_classes;
-	float srdim = sqrt(realDim);
-	f = (1.0 - w1 - w2) * cvAcc + w1 * (1 - dist_same_label / srdim) + w2 * dist_diff_label / srdim;
-	return 1.0 - f;
+    float cvAcc = 0.0;
+    int actual_num_classes = 0;
+    for (int i = 0; i < num_classes; ++i) {
+        if (total[i] > 0) {
+            cvAcc += float(correct[i]) / float(total[i]);
+            actual_num_classes++;
+        }
+    }
+    cvAcc /= actual_num_classes;
+    float srdim = sqrt(realDim);
+    f = (1.0 - w1 - w2) * cvAcc + w1 * (1 - dist_same_label / srdim) + w2 * dist_diff_label / srdim;
+    return 1.0 - f;
 }
-
 
 
 /**
@@ -968,10 +931,9 @@ tFitness evaluate_fitness_on_dataset(int dim, float* x,
  * \param x The solution to be evaluated.
  * \return The fitness of the solution.
  */
-tFitness evaluate_on_dataset(int dim, float* x)
-{
-	//Uses leave-one-out cross validation
-	return evaluate_fitness_on_dataset(dim, x, train_features, train_labels, train_features, train_labels);
+tFitness evaluate_on_dataset(int dim, float *x) {
+    //Uses leave-one-out cross validation
+    return evaluate_fitness_on_dataset(dim, x, train_features, train_labels, train_features, train_labels);
 }
 
 
@@ -981,28 +943,25 @@ tFitness evaluate_on_dataset(int dim, float* x)
  * \param x The solution to be evaluated.
  * \return The average fitness across all folds of cross-validation.
  */
-tFitness evaluate_on_dataset_cv(int dim, float* x)
-{
-	float f = 0.0;
-	for (int fold = 0; fold < train_features_folds.size(); fold++)
-	{
-		f += evaluate_fitness_on_dataset(dim, x, train_features_folds[fold], train_labels_folds[fold],
-			test_features_folds[fold], test_labels_folds[fold]);
-	}
-	return f / train_features_folds.size();
+tFitness evaluate_on_dataset_cv(int dim, float *x) {
+    float f = 0.0;
+    for (int fold = 0; fold < train_features_folds.size(); fold++) {
+        f += evaluate_fitness_on_dataset(dim, x, train_features_folds[fold], train_labels_folds[fold],
+                                         test_features_folds[fold], test_labels_folds[fold]);
+    }
+    return f / train_features_folds.size();
 }
 
-float evaluate_full_features()
-{
-	int K = K_EVAL;
-	cout << "==================== EVALUATION ON KNN (K=" << K << ") ====================" << endl;
-	cout << "Training and testing with the full set of " << problem_dimension << " features" << endl;
-	cout << "Training with " << train_features.size() << " observations" << endl;
-	cout << "Testing with  " << train_features.size() << " observations" << endl;
-	vector<int> aff = vector<int>(problem_dimension, 1);
-	float cvAccFull = knn_accuracy(K, train_features, train_labels, train_features, train_labels, aff);
-	cout << "Accuracy: " << cvAccFull << endl;
-	return cvAccFull;
+float evaluate_full_features() {
+    int K = K_EVAL;
+    cout << "==================== EVALUATION ON KNN (K=" << K << ") ====================" << endl;
+    cout << "Training and testing with the full set of " << problem_dimension << " features" << endl;
+    cout << "Training with " << train_features.size() << " observations" << endl;
+    cout << "Testing with  " << train_features.size() << " observations" << endl;
+    vector<int> aff = vector<int>(problem_dimension, 1);
+    float cvAccFull = knn_accuracy(K, train_features, train_labels, train_features, train_labels, aff);
+    cout << "Accuracy: " << cvAccFull << endl;
+    return cvAccFull;
 }
 
 
@@ -1020,67 +979,61 @@ float evaluate_full_features()
 *		\param etime A float representing the elapsed time
 *		\param nfe An integer representing the number of function evaluations
 */
-void evaluate_solution_fold(vector<float> x, char* fName, float etime, int nfe)
-{
-	FILE* fileOpt;
-	fopen_s(&fileOpt, fName, "at");
+void evaluate_solution_fold(vector<float> x, char *fName, float etime, int nfe) {
+    FILE *fileOpt;
+    fopen_s(&fileOpt, fName, "at");
 
-	int nf = x.size();
-	vector<int> active_features_flag(x.size(), 1);
+    int nf = x.size();
+    vector<int> active_features_flag(x.size(), 1);
 
-	cout << "==================== EVALUATION ON KNN (K=" << K << ") ====================" << endl;
+    cout << "==================== EVALUATION ON KNN (K=" << K << ") ====================" << endl;
 
-	cout << "Training and testing with the full set of " << problem_dimension << " features" << endl;
-	float cvAccFull = 0;
-	for (int fold = 0; fold < evaluation_train_features_folds.size(); ++fold)
-	{
-		cout << "Training with " << evaluation_train_features_folds[fold].size() << " observations" << endl;
-		cout << "Testing with  " << evaluation_test_features_folds[fold].size() << " observations" << endl;
-		cvAccFull += knn_accuracy(K, evaluation_train_features_folds[fold], evaluation_train_labels_folds[fold],
-			evaluation_test_features_folds[fold], evaluation_test_labels_folds[fold],
-			active_features_flag);
-	}
-	cvAccFull /= evaluation_train_features_folds.size();
-	cout << "Accuracy: " << cvAccFull << endl;
+    cout << "Training and testing with the full set of " << problem_dimension << " features" << endl;
+    float cvAccFull = 0;
+    for (int fold = 0; fold < evaluation_train_features_folds.size(); ++fold) {
+        cout << "Training with " << evaluation_train_features_folds[fold].size() << " observations" << endl;
+        cout << "Testing with  " << evaluation_test_features_folds[fold].size() << " observations" << endl;
+        cvAccFull += knn_accuracy(K, evaluation_train_features_folds[fold], evaluation_train_labels_folds[fold],
+                                  evaluation_test_features_folds[fold], evaluation_test_labels_folds[fold],
+                                  active_features_flag);
+    }
+    cvAccFull /= evaluation_train_features_folds.size();
+    cout << "Accuracy: " << cvAccFull << endl;
 
 
-	for (int i = 0; i < x.size(); ++i)
-		if (x[i] < TH)
-		{
-			active_features_flag[i] = 0.0;
-			nf--;
-		}
+    for (int i = 0; i < x.size(); ++i)
+        if (x[i] < TH) {
+            active_features_flag[i] = 0.0;
+            nf--;
+        }
 
-	cout << endl << "TRAIN SET: Training and testing with an optimized set of " << nf << " features" << endl;
-	float cvAccTrain = 0;
-	for (int fold = 0; fold < evaluation_train_features_folds.size(); ++fold)
-	{
-		cout << "Training with " << train_features_folds[fold].size() << " observations" << endl;
-		cout << "Testing with  " << test_features_folds.size() << " observations" << endl;
-		cvAccTrain += knn_accuracy(K, train_features_folds[fold], train_labels_folds[fold],
-			test_features_folds[fold], test_labels_folds[fold],
-			active_features_flag);
-	}
-	cvAccTrain /= evaluation_train_features_folds.size();
-	cout << "Accuracy on train set: " << cvAccTrain << endl;
+    cout << endl << "TRAIN SET: Training and testing with an optimized set of " << nf << " features" << endl;
+    float cvAccTrain = 0;
+    for (int fold = 0; fold < evaluation_train_features_folds.size(); ++fold) {
+        cout << "Training with " << train_features_folds[fold].size() << " observations" << endl;
+        cout << "Testing with  " << test_features_folds.size() << " observations" << endl;
+        cvAccTrain += knn_accuracy(K, train_features_folds[fold], train_labels_folds[fold],
+                                   test_features_folds[fold], test_labels_folds[fold],
+                                   active_features_flag);
+    }
+    cvAccTrain /= evaluation_train_features_folds.size();
+    cout << "Accuracy on train set: " << cvAccTrain << endl;
 
-	cout << endl << "TEST SET: Training and testing with an optimized set of " << nf << " features" << endl;
-	float cvAccTest = 0;
-	for (int fold = 0; fold < evaluation_train_features_folds.size(); ++fold)
-	{
-		cout << "Training with " << evaluation_train_features_folds[fold].size() << " observations" << endl;
-		cout << "Testing with  " << evaluation_test_features_folds[fold].size() << " observations" << endl;
-		cvAccTest += knn_accuracy(K, evaluation_train_features_folds[fold], evaluation_train_labels_folds[fold],
-			evaluation_test_features_folds[fold], evaluation_test_labels_folds[fold],
-			active_features_flag);
-	}
-	cvAccTest /= evaluation_train_features_folds.size();
-	cout << "Accuracy on test set: " << cvAccTest << endl;
-	fprintf(fileOpt, "%.2lf; %d; %d; %.4lf; %.4lf; %.4lf\n", etime, nfe, nf, cvAccFull, cvAccTrain, cvAccTest);
+    cout << endl << "TEST SET: Training and testing with an optimized set of " << nf << " features" << endl;
+    float cvAccTest = 0;
+    for (int fold = 0; fold < evaluation_train_features_folds.size(); ++fold) {
+        cout << "Training with " << evaluation_train_features_folds[fold].size() << " observations" << endl;
+        cout << "Testing with  " << evaluation_test_features_folds[fold].size() << " observations" << endl;
+        cvAccTest += knn_accuracy(K, evaluation_train_features_folds[fold], evaluation_train_labels_folds[fold],
+                                  evaluation_test_features_folds[fold], evaluation_test_labels_folds[fold],
+                                  active_features_flag);
+    }
+    cvAccTest /= evaluation_train_features_folds.size();
+    cout << "Accuracy on test set: " << cvAccTest << endl;
+    fprintf(fileOpt, "%.2lf; %d; %d; %.4lf; %.4lf; %.4lf\n", etime, nfe, nf, cvAccFull, cvAccTrain, cvAccTest);
 
-	fclose(fileOpt);
+    fclose(fileOpt);
 }
-
 
 
 /**
@@ -1096,51 +1049,47 @@ void evaluate_solution_fold(vector<float> x, char* fName, float etime, int nfe)
 *		\param etime A float representing the elapsed time
 *		\param nfe An integer representing the number of function evaluations
 */
-void evaluate_solution(vector<float> x, char* fName, float etime, int nfe)
-{
-	srand(time(nullptr));
-	vector<size_t> predictions;
+void evaluate_solution(vector<float> x, char *fName, float etime, int nfe) {
+    vector<size_t> predictions;
 
-	FILE* fileOpt;
-	fopen_s(&fileOpt, fName, "at");
+    FILE *fileOpt;
+    fopen_s(&fileOpt, fName, "at");
 
-	int nf = x.size();
-	vector<int> active_features_flag(x.size(), 1);
+    int nf = x.size();
+    vector<int> active_features_flag(x.size(), 1);
 
-	int seed = rand() % 100;
-	cout << "seed =" << seed << endl;
-	int K = K_EVAL;
-	cout << "==================== EVALUATION ON KNN (K=" << K << ") ====================" << endl;
-	cout << "Training and testing with the full set of " << problem_dimension << " features" << endl;
-	cout << "Training with " << train_features.size() << " observations" << endl;
-	cout << "Testing with  " << evaluation_features.size() << " observations" << endl;
-	float cvAccFull = knn_accuracy(K, train_features, train_labels, evaluation_features, evaluation_labels, active_features_flag);
-	cout << "Accuracy: " << cvAccFull << endl;
+    int K = K_EVAL;
+    cout << "==================== EVALUATION ON KNN (K=" << K << ") ====================" << endl;
+    cout << "Training and testing with the full set of " << problem_dimension << " features" << endl;
+    cout << "Training with " << train_features.size() << " observations" << endl;
+    cout << "Testing with  " << evaluation_features.size() << " observations" << endl;
+    float cvAccFull = knn_accuracy(K, train_features, train_labels, evaluation_features, evaluation_labels,
+                                   active_features_flag);
+    cout << "Accuracy: " << cvAccFull << endl;
 
-	for (int i = 0; i < x.size(); ++i)
-		if (x[i] < TH)
-		{
-			active_features_flag[i] = 0.0;
-			nf--;
-		}
+    for (int i = 0; i < x.size(); ++i)
+        if (x[i] < TH) {
+            active_features_flag[i] = 0.0;
+            nf--;
+        }
 
-	cout << endl << "TRAIN SET: Training and testing with an optimized set of " << nf << " features" << endl;
-	cout << "Training with " << train_features.size() << " observations" << endl;
-	cout << "Testing with  " << train_features.size() << " observations" << endl;
-	float cvAccTrain = knn_accuracy(K, train_features, train_labels, train_features, train_labels, active_features_flag);
-	cout << "Accuracy on train set: " << cvAccTrain << endl;
+    cout << endl << "TRAIN SET: Training and testing with an optimized set of " << nf << " features" << endl;
+    cout << "Training with " << train_features.size() << " observations" << endl;
+    cout << "Testing with  " << train_features.size() << " observations" << endl;
+    float cvAccTrain = knn_accuracy(K, train_features, train_labels, train_features, train_labels,
+                                    active_features_flag);
+    cout << "Accuracy on train set: " << cvAccTrain << endl;
 
-	cout << endl << "TEST SET: Training and testing with an optimized set of " << nf << " features" << endl;
-	cout << "Training with " << train_features.size() << " observations" << endl;
-	cout << "Testing with  " << evaluation_features.size() << " observations" << endl;
-	float cvAccTest = knn_accuracy(K, train_features, train_labels, evaluation_features, evaluation_labels, active_features_flag);
-	cout << "Accuracy on test set: " << cvAccTest << endl;
+    cout << endl << "TEST SET: Training and testing with an optimized set of " << nf << " features" << endl;
+    cout << "Training with " << train_features.size() << " observations" << endl;
+    cout << "Testing with  " << evaluation_features.size() << " observations" << endl;
+    float cvAccTest = knn_accuracy(K, train_features, train_labels, evaluation_features, evaluation_labels,
+                                   active_features_flag);
+    cout << "Accuracy on test set: " << cvAccTest << endl;
 
-	fprintf(fileOpt, "%.2lf; %d; %d; %.4lf; %.4lf; %.4lf\n", etime, nfe, nf, cvAccFull, cvAccTrain, cvAccTest);
-	fclose(fileOpt);
+    fprintf(fileOpt, "%.2lf; %d; %d; %.4lf; %.4lf; %.4lf\n", etime, nfe, nf, cvAccFull, cvAccTrain, cvAccTest);
+    fclose(fileOpt);
 }
-
-
 
 
 /**
@@ -1149,232 +1098,221 @@ void evaluate_solution(vector<float> x, char* fName, float etime, int nfe)
  * This function calculates the permutation feature importance by randomly permuting
  * the values of a single feature and observing the change in the model's performance.
  *
- * \return A vector of doubles representing the permutation feature importances for each feature.
+ * \return A vector of doubles representing the permutation feature importance for each feature.
  */
-vector<float> permutationFeatureImportance()
-{
-	cout << "Computing permutation feature importance....";
-	vector<float> feature_imp;
+vector<float> permutationFeatureImportance() {
+    cout << "Computing permutation feature importance....";
+    vector<float> feature_imp;
 
-	//fitness with all features
-	vector<float> x(problem_dimension, 1);
-	tFitness f0 = evaluate_on_dataset(problem_dimension, &x[0]);
-	auto rng = std::default_random_engine{};
+    //fitness with all features
+    vector<float> x(problem_dimension, 1);
+    tFitness f0 = evaluate_on_dataset(problem_dimension, &x[0]);
+    auto rng = std::default_random_engine{};
 
-	for (int i = 0; i < problem_dimension; ++i)
-	{
-		//permutate randomly i-th feature on dataset
-		vector<float> feature_i_train0(train_features.size(), 0.0);
-		vector<float> feature_i_train(train_features.size(), 0.0);
-		for (int j = 0; j < train_features.size(); ++j)
-			feature_i_train0[j] = feature_i_train[j] = train_features[j][i];
+    for (int i = 0; i < problem_dimension; ++i) {
+        //permutate randomly i-th feature on dataset
+        vector<float> feature_i_train0(train_features.size(), 0.0);
+        vector<float> feature_i_train(train_features.size(), 0.0);
+        for (int j = 0; j < train_features.size(); ++j)
+            feature_i_train0[j] = feature_i_train[j] = train_features[j][i];
 
-		shuffle(feature_i_train.begin(), feature_i_train.end(), rng);
+        shuffle(feature_i_train.begin(), feature_i_train.end(), rng);
 
-		for (int j = 0; j < train_features.size(); ++j)
-			train_features[j][i] = feature_i_train[j];
+        for (int j = 0; j < train_features.size(); ++j)
+            train_features[j][i] = feature_i_train[j];
 
-		tFitness fi = evaluate_on_dataset(problem_dimension, &x[0]);
+        tFitness fi = evaluate_on_dataset(problem_dimension, &x[0]);
 
-		feature_imp.push_back(fi - f0);
+        feature_imp.push_back(fi - f0);
 
-		//set back the i-th feature values		
-		for (int j = 0; j < train_features.size(); ++j)
-			train_features[j][i] = feature_i_train0[j];
-	}
+        //set back the i-th feature values
+        for (int j = 0; j < train_features.size(); ++j)
+            train_features[j][i] = feature_i_train0[j];
+    }
 
-	float min_pfi = *min_element(feature_imp.begin(), feature_imp.end());
-	for (int k = 0; k < problem_dimension; ++k)
-		feature_imp[k] -= min_pfi;
-	float max_pfi = *max_element(feature_imp.begin(), feature_imp.end());
-	for (int k = 0; k < problem_dimension; ++k)
-	{
-		feature_imp[k] /= max_pfi;
-	}
-	cout << "done" << endl;
-	return feature_imp;
+    float min_pfi = *min_element(feature_imp.begin(), feature_imp.end());
+    for (int k = 0; k < problem_dimension; ++k)
+        feature_imp[k] -= min_pfi;
+    float max_pfi = *max_element(feature_imp.begin(), feature_imp.end());
+    for (int k = 0; k < problem_dimension; ++k) {
+        feature_imp[k] /= max_pfi;
+    }
+    cout << "done" << endl;
+    return feature_imp;
 }
 
 
-void writeTimeToFile(std::string fileName, int i, float time, bool resetOnFirst)
-{
-	std::ofstream file(fileName, std::ios::out | std::ios::app);
+void writeTimeToFile(const std::string &fileName, int i, float time, bool resetOnFirst) {
+    std::ofstream file(fileName, std::ios::out | std::ios::app);
 
-	if (i == 1 && resetOnFirst) {
-		file.close();
-		file.open(fileName, std::ios::out | std::ios::trunc);
-	}
+    if (i == 1 && resetOnFirst) {
+        file.close();
+        file.open(fileName, std::ios::out | std::ios::trunc);
+    }
 
-	file << i << "; " << time << std::endl;
-	file.close();
+    file << i << "; " << time << std::endl;
+    file.close();
 }
 
 
 /**
 
  */
-int toInt(string s)
-{
-	try
-	{
-		size_t pos;
-		return stoi(s, &pos);
-	}
-	catch (std::invalid_argument const& ex) {
-		std::cerr << "Invalid number: " << s << '\n';
-	}
-	catch (std::out_of_range const& ex) {
-		std::cerr << "Number out of range: " << s << '\n';
-	}
+int toInt(string s) {
+    try {
+        size_t pos;
+        return stoi(s, &pos);
+    }
+    catch (std::invalid_argument const &ex) {
+        std::cerr << "Invalid number: " << s << '\n';
+    }
+    catch (std::out_of_range const &ex) {
+        std::cerr << "Number out of range: " << s << '\n';
+    }
+    return 0;
 }
 
 
-std::vector<int> readThreadMapping(std::string fileName)
-{
-	cout << "Reading mapping file:" << fileName << endl;
-	std::ifstream inFile(fileName);
-	if (!inFile) {
-		std::cerr << "Error: File not found." << std::endl;
-		return std::vector<int>();
-	}
-	std::vector<int> result;
-	std::string line;
-	while (std::getline(inFile, line)) {
-		std::istringstream iss(line);
-		int key, value;
-		std::string arrow;
-		if (!(iss >> key >> arrow >> value) || arrow != "->") {
-			std::cerr << "Error: Failed to read line " << line << std::endl;
-			continue;
-		}
-		result.push_back(value);
-	}
-	inFile.close();
-	return result;
+std::vector<int> readThreadMapping(const std::string &fileName) {
+    cout << "Reading mapping file:" << fileName << endl;
+    std::ifstream inFile(fileName);
+    if (!inFile) {
+        std::cerr << "Error: File not found." << std::endl;
+        return std::vector<int>();
+    }
+    std::vector<int> result;
+    std::string line;
+    while (std::getline(inFile, line)) {
+        std::istringstream iss(line);
+        int key, value;
+        std::string arrow;
+        if (!(iss >> key >> arrow >> value) || arrow != "->") {
+            std::cerr << "Error: Failed to read line " << line << std::endl;
+            continue;
+        }
+        result.push_back(value);
+    }
+    inFile.close();
+    return result;
 }
-
 
 
 /**
 
  */
-void optimization(int argc, char* argv[])
-{
-	unsigned numItePerCycle = 5;
-	unsigned numRep = 1;
-	unsigned numThreads = 6;
-	unsigned numberOfEvaluations = 1.0E06;
-	unsigned int sizeOfSubcomponents = 100;
-	int numOfIndividuals = 15;
-	sizeOfSubcomponents = 100;
-	int d_index = 3;
-	d_index = MultipleFeaturesDigit;
-	int suite = 1;
-	string threadMappingFile = "threads_mapping_i7.txt";
+void optimization(int argc, char *argv[]) {
+    unsigned numItePerCycle = 5;
+    unsigned numRep = 1;
+    unsigned numThreads = 6;
+    unsigned numberOfEvaluations = 1.0E06;
+    unsigned int sizeOfSubcomponents = 100;
+    int numOfIndividuals = 15;
+    sizeOfSubcomponents = 100;
+    int d_index = 3;
+    d_index = MultipleFeaturesDigit;
+    int suite = 1;
+    string threadMappingFile = "threads_mapping_i7.txt";
 
-	if (argc == 5)
-	{
-		suite = toInt(argv[1]); //Test suite in {1,2}
-		d_index = toInt(argv[2]); //dataset in {1,2,...}
-		numThreads = toInt(argv[3]); //num threads		
-		threadMappingFile = argv[4];
-	}
+    if (argc == 5) {
+        suite = toInt(argv[1]); //Test suite in {1,2}
+        d_index = toInt(argv[2]); //dataset in {1,2,...}
+        numThreads = toInt(argv[3]); //num threads
+        threadMappingFile = argv[4];
+    }
 
-	if (suite == 1)
-		initDataset1((Dataset1)d_index);
-	else
-		if (suite == 2)
-			initDataset2((Dataset2)d_index);
-		else
-		{
-			cout << "Unspecified test suite";
-			exit(1);
-		}
+    if (suite == 1)
+        initDataset1((Dataset1) d_index);
+    else if (suite == 2)
+        initDataset2((Dataset2) d_index);
+    else {
+        cout << "Unspecified test suite";
+        exit(1);
+    }
 
-	cout << "DATSET: " << dataset_name << endl;
-	cout << "Train samples = " << train_features.size() << endl;
-	cout << "Test samples = " << evaluation_features.size() << endl;
+    cout << "DATSET: " << dataset_name << endl;
+    cout << "Train samples = " << train_features.size() << endl;
+    cout << "Test samples = " << evaluation_features.size() << endl;
 
 
-	int num_procs = omp_get_num_procs();
-	if (numThreads > num_procs) {
-		cout << "numThreads > num_procs" << endl;
-		exit(1);
-	}
-	omp_set_num_threads(numThreads);
+    int num_procs = omp_get_num_procs();
+    if (numThreads > num_procs) {
+        cout << "numThreads > num_procs" << endl;
+        exit(1);
+    }
+    omp_set_num_threads(numThreads);
 
-	// Initialize the affinity mask
-	kmp_affinity_mask_t affinity_mask;
-	kmp_create_affinity_mask(&affinity_mask);
-	vector<int> mapping = readThreadMapping(threadMappingFile);
-	if (mapping.size() != num_procs) {
-		cout << "Thread mapping not correct" << endl;
-		exit(1);
-	}
-#pragma omp parallel  
-	{
-		int id = omp_get_thread_num();
-		kmp_set_affinity_mask_proc(mapping[id], &affinity_mask);
-		kmp_set_affinity(&affinity_mask);
-	}
+    // Initialize the affinity mask
+    /*
+    kmp_affinity_mask_t affinity_mask;
+    kmp_create_affinity_mask(&affinity_mask);
+    vector<int> mapping = readThreadMapping(threadMappingFile);
+    if (mapping.size() != num_procs) {
+        cout << "Thread mapping not correct" << endl;
+        exit(1);
+    }
+#pragma omp parallel
+    {
+        int id = omp_get_thread_num();
+        kmp_set_affinity_mask_proc(mapping[id], &affinity_mask);
+        kmp_set_affinity(&affinity_mask);
+    }
+    */
 
-	dataset_name.append("_");
+    dataset_name.append("_");
 
-	for (int i = 0; i < numThreads; ++i)
-		distances_buff.push_back(new matrix(train_features.size(), train_features.size()));
+    for (int i = 0; i < numThreads; ++i)
+        distances_buff.push_back(new matrix(train_features.size(), train_features.size()));
 
-	vector<int> seeds;
-	unsigned maxNumRep = 100;
-	for (unsigned i = 0; i < maxNumRep; ++i)
-		seeds.push_back(i);
+    vector<int> seeds;
+    unsigned maxNumRep = 100;
+    for (unsigned i = 0; i < maxNumRep; ++i)
+        seeds.push_back(i);
 
-	cout << "Number of features = " << problem_dimension << endl;
-	cout << "Number of labels = " << num_classes << endl;
-	cout << "Using " << numThreads << " threads" << endl;
-	cout << "Number of iterations per cycle = " << numItePerCycle << endl;
-	cout << "Number of individuals per subpopulation = " << numOfIndividuals << endl;
+    cout << "Number of features = " << problem_dimension << endl;
+    cout << "Number of labels = " << num_classes << endl;
+    cout << "Using " << numThreads << " threads" << endl;
+    cout << "Number of iterations per cycle = " << numItePerCycle << endl;
+    cout << "Number of individuals per subpopulation = " << numOfIndividuals << endl;
 
-	char fNameOptimizedFeatures[256];
-	char fNameTiming[256];
-	FILE* file;
-	sprintf_s(fNameOptimizedFeatures, "results_optimized_features_%s.csv", dataset_name.c_str());
-	sprintf_s(fNameTiming, "timing_%s.csv", dataset_name.c_str());
-	fopen_s(&file, fNameOptimizedFeatures, "wt"); fclose(file);
+    char fNameOptimizedFeatures[256];
+    char fNameTiming[256];
+    FILE *file;
+    sprintf_s(fNameOptimizedFeatures, "results_optimized_features_%s.csv", dataset_name.c_str());
+    sprintf_s(fNameTiming, "timing_%s.csv", dataset_name.c_str());
+    fopen_s(&file, fNameOptimizedFeatures, "wt");
+    fclose(file);
 
-	vector< vector<ConvPlotPoint> > convergences;
+    vector<vector<ConvPlotPoint> > convergences;
 
-	//left empty in this implementation /apply random grouping)
-	vector<set<unsigned>> decomposition;
+    //left empty in this implementation /apply random grouping)
+    vector<set<unsigned>> decomposition;
 
-	for (unsigned k = 0; k < numRep; ++k)
-	{
-		vector<ConvPlotPoint> convergence;
-		CCDE ccde;
-		int seed = seeds[k];
+    for (unsigned k = 0; k < numRep; ++k) {
+        vector<ConvPlotPoint> convergence;
+        CCDE ccde;
+        int seed = seeds[k];
 
-		vector<float> pfi = permutationFeatureImportance();
+        vector<float> pfi = permutationFeatureImportance();
 
-		float optTime = ccde.optimize(evaluate_on_dataset, problem_dimension, 0.0, 1.0, numberOfEvaluations,
-			sizeOfSubcomponents, numOfIndividuals, convergence, seed, numItePerCycle,
-			numThreads, decomposition, pfi);
+        float optTime = ccde.optimize(evaluate_on_dataset, problem_dimension, 0.0, 1.0, numberOfEvaluations,
+                                      sizeOfSubcomponents, numOfIndividuals, convergence, seed, numItePerCycle,
+                                      decomposition, pfi);
 
-		cout << "elapsed time = " << optTime << " s" << endl;
-		writeTimeToFile(fNameTiming, numThreads, optTime, false);
+        cout << "elapsed time = " << optTime << " s" << endl;
+        writeTimeToFile(fNameTiming, numThreads, optTime, false);
 
-		if (convergence.size() > 0)
-			convergences.push_back(convergence);
+        if (!convergence.empty())
+            convergences.push_back(convergence);
 
-		evaluate_solution(ccde.current_solution, fNameOptimizedFeatures, ccde.elapsedTime, ccde.numberOfEvaluations);
+        evaluate_solution(ccde.current_solution, fNameOptimizedFeatures, ccde.elapsedTime, ccde.numberOfEvaluations);
 
-		if (numRep > 1)
-			initDataset1((Dataset1)d_index);
-	}
+        if (numRep > 1)
+            initDataset1((Dataset1) d_index);
+    }
 }
 
 
-
-int main(int argc, char* argv[])
-{
-	optimization(argc, argv);
+int main(int argc, char *argv[]) {
+    optimization(argc, argv);
 }
 

@@ -14,7 +14,6 @@
 
 #include "SHADE.h"
 #include "CCDE.h"
-#include <omp.h>
 
 
 
@@ -32,20 +31,6 @@ SHADE::SHADE(unsigned _dimension, unsigned _numberOfIndividuals, Decomposer& _gr
 	SHADE_p = 0.1;
 	numThreads = 1;
 }
-
-
-vector<float>& SHADE::getCollaborator()
-{
-	return parents[indexOfBest];
-}
-
-
-void SHADE::setCoordinates(vector<unsigned>& _coordinates)
-{
-	coordinates = _coordinates;
-	for (unsigned i = 0; i < coordinates.size(); ++i)
-		globalCoordToLocalCoord[coordinates[i]] = i;
-};
 
 
 void SHADE::setCoordinates(unsigned* _coordinates, unsigned numOfCoordinates)
@@ -73,8 +58,8 @@ void SHADE::loadIndividuals(vector< vector<float> >& population)
 	{
 		vector< float > position;
 
-		for (unsigned ld = 0; ld < coordinates.size(); ld++)
-			position.push_back(population[i][coordinates[ld]]);
+		for (unsigned int coordinate : coordinates)
+			position.push_back(population[i][coordinate]);
 
 		parents.push_back(position);
 	}
@@ -120,7 +105,12 @@ void SHADE::sortPopulation(vector<tFitness>& fitness, vector<int>& sortIndex)
 	sort(&sortIndex[0], &sortIndex[0] + sortIndex.size(), doCompareIndividuals(&fitness[0]));
 }
 
-
+/**
+ * \brief Handler function to ensure each child's value stays within the specified bounds defined by the parent.
+ * \param child a reference to a float vector representing the child's candidate solution.
+ * \param parent a reference to a float vector representing the parent candidate solution.
+ * \details The function loops through the child vector and compares each element to the lower and upper limits determined by the optimizer. If the child's value is less than the lower limit, it sets the value to the average of the lower limit and parent's corresponding value. If the child's value is greater than the upper limit, it sets the value to the average of the upper limit and parent's corresponding value.
+ */
 void SHADE::handleBounds(vector<float>& child, vector<float>& parent)
 {
 	float l_min_region = decomposer.CCOptimizer.lowerLimit;
@@ -139,11 +129,14 @@ void SHADE::handleBounds(vector<float>& child, vector<float>& parent)
 	}
 }
 
-//******************************************************************************************/
-//
-//
-//
-//******************************************************************************************/
+
+/**
+ * \brief Update the population using the SHADE algorithm.
+ *
+ * This function sorts the population from best to worst, generates the CR and F values based on Gaussian and Cauchy distribution, generates the mutant vector, and evaluates the child population.
+ * It then selects and saves the successful parameters. Finally, it updates the memories of the best performing vectors.
+ *
+ */
 void SHADE::update()
 {
 	//Sort the population from best to worst
@@ -282,7 +275,7 @@ void SHADE::update()
 	}
 
 
-	if (success_cr.size())
+	if (!success_cr.empty())
 	{
 		memory_sf[memory_index] = 0;
 		memory_cr[memory_index] = 0;
@@ -321,23 +314,12 @@ void SHADE::update()
 }
 
 
-
-//******************************************************************************************/
-//
-//
-//
-//******************************************************************************************/
-void SHADE::setParentFitness(vector<tFitness>& fitnessValues)
-{
-	parentsFitness = fitnessValues;
-}
-
-
-//******************************************************************************************/
-//
-//
-//
-//******************************************************************************************/
+/**
+ * \brief Evaluates the fitness of the population using the SHADE algorithm
+ *
+ * \param population a vector of vectors representing the population
+ * \param fitness a vector of tFitness containing the fitness values of the population
+ */
 void SHADE::evaluatePopulation(vector< vector<float> >& population, vector<tFitness>& fitness)
 {
 	fitness.resize(population.size());
@@ -368,26 +350,6 @@ int SHADE::evaluateParents()
 	evaluatePopulation(parents, parentsFitness);
 	return parents.size();
 }
-
-
-//******************************************************************************************/
-//
-//
-//
-//******************************************************************************************/
-tFitness SHADE::calculateFitnessValue(vector<float>& p)
-{
-	vector< float > xp(decomposer.coordinates.size());
-
-	for (unsigned d = 0; d < decomposer.coordinates.size(); ++d)
-		xp[d] = decomposer.contextVector[d];
-
-	for (unsigned ld = 0; ld < coordinates.size(); ld++)
-		xp[coordinates[ld]] = p[ld];
-
-	return decomposer.CCOptimizer.computeFitnessValue(xp);
-}
-
 
 
 //******************************************************************************************/
@@ -435,21 +397,6 @@ void SHADE::updateIndexOfBest()
 }
 
 
-void SHADE::updateContextVector()
-{
-	vector<float> cvt = decomposer.contextVector;
-	for (unsigned ld = 0; ld < coordinates.size(); ld++)
-		cvt[coordinates[ld]] = parents[indexOfBest][ld];
-	tFitness nf = decomposer.CCOptimizer.computeFitnessValue(cvt);
-	if (nf < decomposer.CCOptimizer.current_best_fitness)
-	{
-		decomposer.CCOptimizer.current_best_fitness = nf;
-		decomposer.contextVector = cvt;
-		nfe++;
-	}
-}
-
-
 void SHADE::updateContextVectorMT()
 {
 
@@ -468,16 +415,6 @@ void SHADE::updateContextVectorMT()
 			nfe++;
 		}
 	}
-}
-
-void SHADE::updateContextVector(vector<float>& cv, vector<unsigned>& coords, unsigned& vi)
-{
-	for (unsigned ld = 0; ld < coordinates.size(); ld++)
-	{
-		cv[vi + ld] = parents[indexOfBest][ld];
-		coords[vi + ld] = coordinates[ld];
-	}
-	vi += coordinates.size();
 }
 
 

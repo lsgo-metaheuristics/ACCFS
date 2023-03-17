@@ -17,17 +17,16 @@
 
 #include <vector>
 
-class MinMaxScaler 
-{
+class MinMaxScaler {
 public:
     // Constructor
     MinMaxScaler();
 
     // Fit the scaler to the input data
-    void fit(const std::vector<std::vector<float>>& data);
+    void fit(const std::vector<std::vector<float>> &data);
 
     // Scale the input data using the computed minimum and maximum values
-    std::vector<std::vector<float>> transform(const std::vector<std::vector<float>>& data) const;
+    std::vector<std::vector<float>> transform(const std::vector<std::vector<float>> &data) const;
 
 private:
     std::vector<float> _min_vals;

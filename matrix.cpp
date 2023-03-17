@@ -14,31 +14,25 @@
 
 #include "matrix.h"
 
-matrix::matrix(int numRows, int numCols) : rows(numRows), cols(numCols)
-{
+matrix::matrix(int numRows, int numCols) : rows(numRows), cols(numCols) {
     data = new float[numRows * numCols];
-    for (int i = 0; i < numRows * numCols; ++i)
-    {
+    for (int i = 0; i < numRows * numCols; ++i) {
         data[i] = 0.0;
     }
 }
 
-matrix::~matrix()
-{
+matrix::~matrix() {
     delete[] data;
 }
 
-float* matrix::operator[](int rowIndex)
-{
+float *matrix::operator[](int rowIndex) {
     return data + rowIndex * cols;
 }
 
-int matrix::numRows() const
-{
+int matrix::numRows() const {
     return rows;
 }
 
-int matrix::numCols() const
-{
+int matrix::numCols() const {
     return cols;
 }

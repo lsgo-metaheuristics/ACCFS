@@ -49,25 +49,24 @@ class SHADE
 
 public:
 	SHADE(unsigned _dimension, unsigned _numberOfIndividuals, Decomposer& _group, RandomEngine& _eng);
-	void setCoordinates(vector<unsigned>& _coordinates);
-	void setCoordinates(unsigned* coordinates, unsigned numOfCoordinates);
+
+    void setCoordinates(unsigned* coordinates, unsigned numOfCoordinates);
 	void update();
 	void sortPopulation(vector<tFitness>& fitness, vector<int>& sortIndex);
 	void evaluatePopulation(vector< vector<float> >& population, vector< tFitness >& fitness);
 	int evaluateParents();
-	tFitness calculateFitnessValue(vector<float>& p);
-	int optimize(int iterations);
+
+    int optimize(int iterations);
 	void updateIndexOfBest();
 	void loadIndividuals(vector< vector<float> >& population);
 	void storeIndividuals(vector< vector<float> >& population);
 	void updateIndividuals(vector< vector<float> >& population);
-	void updateContextVector();
-	void updateContextVectorMT();
-	void updateContextVector(vector<float>& cv, vector<unsigned>& coords, unsigned& vi);
-	void setParentFitness(vector<tFitness>& fitnessValues);
-	void handleBounds(vector<float>& child, vector<float>& parent);
-	vector<float>& getCollaborator();
-	unsigned numThreads;
+
+    void updateContextVectorMT();
+
+    void handleBounds(vector<float>& child, vector<float>& parent);
+
+    unsigned numThreads;
 	unsigned nfe;
 	vector<unsigned> coordinates;
 	map<unsigned, unsigned> globalCoordToLocalCoord;
@@ -83,7 +82,7 @@ public:
 	unsigned indexOfBest;
 	unsigned numberOfIndividuals;
 	RandomEngine& eng;
-	uniform_real<float> unifRandom;
+	uniform_real_distribution<float> unifRandom;
 	vector<float> success_sf;  // successful F values
 	vector<float> success_cr;  // successful CR value
 	vector<tFitness> dif_fitness;

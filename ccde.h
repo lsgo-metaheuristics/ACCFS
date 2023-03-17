@@ -25,8 +25,8 @@
 #include <set>
 #include <list>
 #include <map>
-#include "SHADE.h"
-#include "Decomposer.h"
+#include "shade.h"
+#include "decomposer.h"
 #include <numeric>
 
 #define TH 0.5
@@ -49,8 +49,8 @@ class ConvPlotPoint
 public:
 	unsigned nfe;
 	tFitness f;
-	unsigned subcomponentSize;
-	unsigned individuals;
+	//unsigned subcomponentSize;
+	//unsigned individuals;
 	unsigned numFeatures;
 	unsigned numberOfSubcomponents;
 	ConvPlotPoint(unsigned  _nfe, tFitness _f, unsigned _nfeat, unsigned _ns) :
@@ -85,13 +85,13 @@ public:
 	///Perform the optimization
 	float optimize(FunctionCallback _function, unsigned dim, float domain_min, float domain_max, unsigned int maxNumberOfEvaluations, unsigned sizeOfSubcomponents,
 		unsigned individualsPerSubcomponent,
-		vector<ConvPlotPoint>& convergence, int seed, unsigned numItePerCycle, unsigned numThreads,
-		vector<set<unsigned>> decomposition,
+		vector<ConvPlotPoint>& convergence, int seed, unsigned numItePerCycle,
+		vector<set<unsigned>> &decomposition,
 		vector<float> pfi);
 	void printResults();
 	vector<unsigned> getFeatureFlags();
 	tFitness computeFitnessValue(vector<float>& x);
-	bool keepFeature(int gc, FunctionCallback fitness, vector<unsigned> counters, vector<float> b, float best_fitness, int count_threshold);
+	bool keepFeature(int gc, FunctionCallback fitness, vector<unsigned> counters, float best_fitness, int count_threshold);
 
 	unsigned problemDimension;
 	Decomposer* decomposer;

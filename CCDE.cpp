@@ -12,20 +12,15 @@
 //
 //=======================================================================================
 
-#include <ctime>
-#include <omp.h>
 #include <cmath>
 #include <fstream>
-#include <string>
 #include <algorithm>
-#include <time.h>
+#include <ctime>
 #include "matrix.h"
-#include "CCDE.h"
-#include "Decomposer.h"
-#include "SHADE.h"
-#include "CCDE.h"
-#include "Decomposer.h"
-#include "SHADE.h"
+#include "ccde.h"
+#include "decomposer.h"
+#include "shade.h"
+
 
 
 using namespace std;
@@ -38,9 +33,7 @@ extern vector<matrix*> distances_buff;
 //
 //******************************************************************************************/
 CCDE::CCDE()
-{
-
-}
+= default;
 
 //******************************************************************************************/
 //
@@ -81,16 +74,19 @@ CCDE::~CCDE()
 
 
 
-
-
-
-//******************************************************************************************/
-//
-//
-//
-//******************************************************************************************/
-bool CCDE::keepFeature(int gc, FunctionCallback fitness, vector<unsigned> counters,
-	vector<float> b, float best_fitness, int count_threshold)
+/**
+ * \brief Determines if a feature is to be kept or not based on the given parameters
+ *
+ * \param gc The feature to be considered
+ * \param fitnessFunction The function used to determine the fitness of the feature
+ * \param counters The vector of counters of the feature
+ * \param best_fitness The best fitness score achieved so far
+ * \param count_threshold The threshold value for the number of times the feature has been used
+ *
+ * \return A boolean value indicating whether the feature should be kept or not
+ */
+bool CCDE::keepFeature(int gc, FunctionCallback fitnessFunction, vector<unsigned> counters,
+	                   float best_fitness, int count_threshold)
 {
 	if (counters[gc] < count_threshold)
 		return true;
@@ -99,7 +95,7 @@ bool CCDE::keepFeature(int gc, FunctionCallback fitness, vector<unsigned> counte
 		vector<float> ts = current_solution;
 		ts[gc] = 1;
 		numberOfEvaluations++;
-		if (best_fitness - fitness(ts.size(), &ts[0]) > 0.001)
+		if (best_fitness - fitnessFunction(ts.size(), &ts[0]) > 0.001)
 			return true;
 	}
 	return false;
@@ -107,11 +103,23 @@ bool CCDE::keepFeature(int gc, FunctionCallback fitness, vector<unsigned> counte
 
 
 
-//******************************************************************************************/
-//
-//
-//
-//******************************************************************************************/
+/**
+ * \brief Use a Cooperative Coevolutionary Differential Evolution algorithm to select features.
+ *
+ * \param _function Function to optimize.
+ * \param dim Number of problem dimensions.
+ * \param _lowerLimit Lower limit of search space.
+ * \param _upperLimit Upper limit of search space.
+ * \param maxNumberOfEvaluations Max number of evaluations.
+ * \param _sizeOfSubcomponents Size of subcomponents.
+ * \param individualsPerSubcomponent Number of individuals per subcomponent.
+ * \param convergence Vector of convergence plots.
+ * \param seed Random seed.
+ * \param numItePerCycle Number of iterations per cycle.
+ * \param decomposition Vector of sets of coordinates.
+ * \param pfi Performance Feature Identification.
+ * \return Total elapsed time of the optimization process.
+ */
 float CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit, float _upperLimit,
 	unsigned int maxNumberOfEvaluations,
 	unsigned _sizeOfSubcomponents,
@@ -119,8 +127,7 @@ float CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit
 	vector<ConvPlotPoint>& convergence,
 	int seed,
 	unsigned numItePerCycle,
-	unsigned numAvailableThreads,
-	vector<set<unsigned>> decomposition,
+	vector<set<unsigned>> &decomposition,
 	vector<float> pfi)
 {
 	int LS_freq = 4;
@@ -138,8 +145,8 @@ float CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit
 
 	unsigned size_of_sub = _sizeOfSubcomponents;
 	unsigned ind_per_sub = individualsPerSubcomponent;
-	tFitness prevFitness = 0;
-	unsigned fit_not_improve_counter = 0;
+	tFitness prevFitness;
+	unsigned fit_not_improve_counter;
 
 	lowerLimit = _lowerLimit;
 	upperLimit = _upperLimit;
@@ -192,12 +199,11 @@ float CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit
 			vector<float> ncv;
 
 #pragma omp parallel for schedule(dynamic) 
-			for (int i = 0; i < decomposer->coordinates.size(); ++i)
+			for (unsigned int lc : decomposer->coordinates)
 			{
 				//Gets the actual feature corresponding to i-th coordinate
-				unsigned lc = decomposer->coordinates[i];
-				unsigned gc = coordinate_translator[lc];
-				if (pfi[gc] > pfi_threshold || keepFeature(gc, fitness, counters, decomposer->contextVector, current_best_fitness, counter_threshold))
+					unsigned gc = coordinate_translator[lc];
+				if (pfi[gc] > pfi_threshold || keepFeature(gc, fitness, counters, current_best_fitness, counter_threshold))
 				{
 #pragma omp critical
 					{
@@ -267,8 +273,8 @@ float CCDE::optimize(FunctionCallback _function, unsigned dim, float _lowerLimit
 
 
 #pragma omp parallel for 
-		for (int j = 0; j < decomposer->optimizers.size(); ++j)
-			decomposer->optimizers[j]->updateContextVectorMT();
+		for (auto & optimizer : decomposer->optimizers)
+			optimizer->updateContextVectorMT();
 
 #pragma omp parallel for 
 		for (int i = 0; i < dim; ++i)

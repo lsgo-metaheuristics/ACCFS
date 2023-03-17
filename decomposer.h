@@ -13,7 +13,7 @@
 //=======================================================================================
 
 #pragma once
-#include "SHADE.h"
+#include "shade.h"
 #include <vector>
 #include <set>
 #include <queue>
